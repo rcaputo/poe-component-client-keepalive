@@ -1,0 +1,248 @@
+Client-Keepalive(3)   User Contributed Perl Documentation  Client-Keepalive(3)
+
+
+
+NNAAMMEE
+       POE::Component::Client::Keepalive - manage connections, with keep-alive
+
+SSYYNNOOPPSSIISS
+         use warnings;
+         use strict;
+
+         use POE;
+         use POE::Component::Client::Keepalive;
+
+         POE::Session->create(
+           inline_states => {
+             _start    => \&start,
+             got_conn  => \&got_conn,
+             got_error => \&handle_error,
+             got_input => \&handle_input,
+             use_conn  => \&use_conn,
+           }
+         );
+
+         POE::Kernel->run();
+         exit;
+
+         sub start {
+           $_[HEAP]->{cm} = POE::Component::Client::Keepalive->new();
+
+           my $conn = $_[HEAP]->{cm}->allocate(
+             scheme  => "http",
+             addr    => "127.0.0.1",
+             port    => 9999,
+             event   => "got_conn",
+             context => "arbitrary data (even a reference) here",
+             timeout => 60,
+           );
+
+           if (defined $conn) {
+             print "Connection was returned from keep-alive cache.\n";
+             $_[KERNEL]->yield(use_conn => $conn);
+             return;
+           }
+
+           print "Connection is in progress.\n";
+         }
+
+         sub got_conn {
+           my ($kernel, $heap, $response) = @_[KERNEL, HEAP, ARG0];
+
+           my $conn    = $response->{connection};
+           my $context = $response->{context};
+
+           if (defined $conn) {
+             print "Connection was established asynchronously.\n";
+             $kernel->yield(use_conn => $conn);
+             return;
+           }
+
+           print(
+             "Connection could not be established: ",
+             "$response->{function} error $response->{error_num}: ",
+             "$response->{error_str}\n"
+           );
+         }
+
+         sub use_conn {
+           my ($heap, $conn) = @_[HEAP, ARG0];
+
+           $heap->{connection} = $conn;
+           $conn->start(
+             InputEvent => "got_input",
+             ErrorEvent => "got_error",
+           );
+         }
+
+         sub handle_input {
+           my $input = $_[ARG0];
+           print "$input\n";
+         }
+
+         sub handle_error {
+           my $heap = $_[HEAP];
+           delete $heap->{connection};
+           $heap->{cm}->shutdown();
+         }
+
+DDEESSCCRRIIPPTTIIOONN
+       POE::Component::Client::Keepalive creates and manages connections for
+       other components.  It maintains a cache of kept-alive connections for
+       quick reuse.  It is written specifically for clients that can benefit
+       from kept-alive connections, such as HTTP clients.  Using it for one-
+       shot connections would probably be silly.
+
+       new
+         Creates a new keepalive connection manager.  A program may contain
+         several connection managers.  Each will operate independently of the
+         others.  None will know about the limits set in the others, so it's
+         possible to overrun your file descriptors for a process if you're not
+         careful.
+
+         _n_e_w_(_) takes up to four parameters.  All of them are optional.
+
+         To limit the number of simultaneous connections to a particular host
+         (defined by a combination of scheme, address and port):
+
+           max_per_host => $max_simultaneous_host_connections, # defaults to 4
+
+         To limit the overall number of connections that may be open at once,
+         use
+
+           max_open     => $maximum_open_connections, # defaults to 128
+
+         Programs are required to give connections back to the manager when
+         they are done.  See the _f_r_e_e_(_) method for how that works.  The con-
+         nection manager will keep connections alive for a period of time
+         before recycling them.  The maximum keep-alive time may be set with
+
+           keep_alive   => $seconds_to_keep_free_conns_alive, # defaults to 15
+
+         Programs may not want to wait a long time for a connection to be
+         established.  They can set the request timeout to alter how long the
+         component holds a request before generating an error.
+
+           timeout      => $seconds_to_process_a_request, # defaults to 120
+
+       allocate
+         Allocate a new connection.  _A_l_l_o_c_a_t_e_(_) will return a connection imme-
+         diately if the keep-alive pool contains one matching the given
+         scheme, address, and port.  Otherwise _a_l_l_o_c_a_t_e_(_) will return undef
+         and begin establishing a connection asynchronously.  A message will
+         be posted back to the requesting session when the connection status
+         is finally known.
+
+         _A_l_l_o_c_a_t_e_(_) requires five parameters and has an optional sixth.
+
+         Specify the scheme that will be used to communicate on the connection
+         (typically http or https).  The scheme is required.
+
+           scheme  => $connection_scheme,
+
+         Request a connection to a particular address and port.  The address
+         and port must be numeric.  Both the address and port are required.
+
+           address => $remote_address,
+           port    => $remote_port,
+
+         Specify an name of the event to post when an asynchronous response is
+         ready.  The response event is required, but it won't be used if _a_l_l_o_-
+         _c_a_t_e_(_) can return a connection right away.
+
+           event   => $return_event,
+
+         Set the connection timeout, in seconds.  The connection manager will
+         return an error (ETIMEDOUT) if it can't establish a connection within
+         the requested time.  This parameter is optional.  It will default to
+         the master timeout provided to the connection manager's constructor.
+
+           timeout => $connect_timeout,
+
+         Specify additional contextual data.  The context defines the connec-
+         tion's purpose.  It is used to maintain continuity between a call to
+         _a_l_l_o_c_a_t_e_(_) and an asynchronous response.  A context is extremely
+         handy, but it's optional.
+
+           context => $context_data,
+
+         In summary:
+
+           my $connection = $mgr->allocate(
+             scheme   => "http",
+             address  => "127.0.0.1",
+             port     => 80,
+             event    => "got_a_connection",
+             context  => \%connection_context,
+           );
+
+         The response event ("got_a_connection" in this example) contains sev-
+         eral fields, passed as a list of key/value pairs.  The list may be
+         assigned to a hash for convenience:
+
+           sub got_a_connection {
+             my %response = @_[ARG0..$#_];
+             ...;
+           }
+
+         Four of the fields exist to echo back your data:
+
+           $response{address}    = $your_request_address;
+           $response{context}    = $your_request_context;
+           $response{port}       = $your_request_port;
+           $response{scheme}     = $your_request_scheme;
+
+         One field returns the connection object if the connection was suc-
+         cessful, or undef if there was a failure:
+
+           $response{connection} = $new_socket_handle;
+
+         Three other fields return error information if the connection failed.
+         They are not present if the connection was successful.
+
+           $response{function}   = $name_of_failing_function;
+           $response{error_num}  = $! as a number;
+           $response{error_str}  = $! as a string;
+
+       free
+         _F_r_e_e_(_) notifies the connection manager when connections are free to
+         be reused.  Freed connections are entered into the keep-alive pool
+         and may be returned by subsequent _a_l_l_o_c_a_t_e_(_) calls.
+
+           $mgr->free($socket);
+
+         For now _f_r_e_e_(_) is called with a socket, not a connection object.
+         This is usually not a problem since POE::Component::Connec-
+         tion::Keepalive objects call _f_r_e_e_(_) for you when they are destroyed.
+
+         Not calling _f_r_e_e_(_) will cause a program to leak connections.  This is
+         also not generally a problem, since _f_r_e_e_(_) is called automatically
+         whenever connection objects are destroyed.
+
+       shutdown
+         The keep-alive pool requires connections to be active internally.
+         This may keep a program active even when all connections are idle.
+         The _s_h_u_t_d_o_w_n_(_) method forces the connection manager to clear its
+         keep-alive pool, allowing a program to terminate gracefully.
+
+           $mgr->shutdown();
+
+SSEEEE AALLSSOO
+       POE POE::Component::Connection::Keepalive
+
+BBUUGGSS
+       None known.
+
+LLIICCEENNSSEE
+       This distribution is copyright 2004 by Rocco Caputo.  All rights are
+       reserved.  This distribution is free software; you may redistribute it
+       and/or modify it under the same terms as Perl itself.
+
+AAUUTTHHOORR
+       Rocco Caputo <rcaputo@cpan.org>
+
+       Special thanks to Rob Bloodgood.
+
+
+
+perl v5.8.4                       2004-10-03               Client-Keepalive(3)
