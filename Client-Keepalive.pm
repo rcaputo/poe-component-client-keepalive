@@ -127,11 +127,11 @@ sub new {
   return $self;
 }
 
-# Initialize the hidden session behind this component.  Set an alias so
-# the public methods can send it messages easily.
+# Initialize the hidden session behind this component.
+# Set an alias so the public methods can send it messages easily.
 
 sub _cm_initialize {
-  my ($object, $kernel, $heap, %args) = @_[OBJECT, KERNEL, HEAP, ARG0..$#_];
+  my ($object, $kernel) = @_[OBJECT, KERNEL];
   $kernel->alias_set("$object");
 }
 
@@ -549,7 +549,7 @@ sub _decrement_used_each {
 # select_read() to discard any data and detect when it's closed.
 
 sub _cm_reclaim_socket {
-  my ($self, $kernel, $heap, $used) = @_[OBJECT, KERNEL, HEAP, ARG0];
+  my ($self, $kernel, $used) = @_[OBJECT, KERNEL, ARG0];
 
   my $socket = $used->[USED_SOCKET];
 
