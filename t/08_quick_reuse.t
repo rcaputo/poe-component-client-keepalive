@@ -107,12 +107,17 @@ sub got_conn {
 sub got_another_conn {
   my ($heap, $stuff) = @_[HEAP, ARG0];
 
-  my $conn  = $stuff->{connection};
+  # Deleting here to avoid a copy of the connection in %$stuff.
+  my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
   ok(defined($conn), "$which connection established asynchronously");
 
-  $heap->{cm}->shutdown();
+  # Free the connection so it doesn't cause fatal ASSERT errors when
+  # it's freed after its connection manager.
+  $conn = undef;
+
   TestServer->shutdown();
+  $heap->{cm}->shutdown();
 }
 
 POE::Kernel->run();

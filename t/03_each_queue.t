@@ -131,8 +131,8 @@ sub got_fourth_conn {
 
   $conn = undef;
 
-  $heap->{cm}->shutdown();
   TestServer->shutdown();
+  $heap->{cm}->shutdown();
 }
 
 POE::Kernel->run();

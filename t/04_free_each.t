@@ -99,8 +99,12 @@ sub test_alloc_and_free {
 
   ok(defined($new), "third connection honored from the pool");
 
-  $heap->{cm}->shutdown();
+  # Free the new socket, to avoid ASSERT errors when the connection
+  # manager is freed before the sockets are.
+  $new = undef;
+
   TestServer->shutdown();
+  $heap->{cm}->shutdown();
 }
 
 POE::Kernel->run();

@@ -102,8 +102,8 @@ sub got_conn {
 }
 
 sub second_kept_alive {
-  $_[HEAP]->{cm}->shutdown();
   TestServer->shutdown();
+  $_[HEAP]->{cm}->shutdown();
 }
 
 POE::Kernel->run();

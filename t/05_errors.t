@@ -119,15 +119,20 @@ POE::Session->create(
     },
     got_conn => sub {
       my ($kernel, $heap, $response) = @_[KERNEL, HEAP, ARG0];
-      my $conn = $response->{connection};
+
+      # Delete here to avoid an extra copy of the connection.
+      my $conn = delete $response->{connection};
 
       eval {
         $conn->start("moo");
       };
       test_err($@, "Must call start() with an even number of parameters");
 
-      $heap->{cm}->shutdown();
+      # Free the connection.
+      $conn = undef;
+
       TestServer->shutdown();
+      $heap->{cm}->shutdown();
     },
     _child => sub { },
     _stop  => sub { },

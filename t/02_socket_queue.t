@@ -145,8 +145,8 @@ sub got_fourth_conn {
   ok($stuff->{error_str} eq "Connection refused", "connection refused");
 
   # Shut things down.
-  $heap->{cm}->shutdown();
   TestServer->shutdown();
+  $heap->{cm}->shutdown();
 }
 
 POE::Kernel->run();
