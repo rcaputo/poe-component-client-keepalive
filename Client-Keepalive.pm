@@ -121,7 +121,6 @@ sub new {
         cm_wake_up           => "_cm_wake_up",
       },
     ],
-    args => [ %args ],
   );
 
   return $self;
