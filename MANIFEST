@@ -5,8 +5,8 @@ Conn-Keepalive.pm
 MANIFEST
 Makefile.PL
 README
-cvr.perl
 mylib/TestServer.pm
+mylib/cvr.perl
 t/01_socket_reuse.t
 t/02_socket_queue.t
 t/03_each_queue.t
