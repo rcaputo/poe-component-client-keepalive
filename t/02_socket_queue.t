@@ -8,7 +8,7 @@
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
-use Test::More tests => 10;
+use Test::More tests => 9;
 use Errno qw(ECONNREFUSED);
 
 sub POE::Kernel::ASSERT_DEFAULT () { 1 }
@@ -29,8 +29,8 @@ POE::Session->create(
     _stop           => sub { },
     got_error       => \&got_error,
     got_first_conn  => \&got_first_conn,
+    got_third_conn  => \&got_third_conn,
     got_fourth_conn => \&got_fourth_conn,
-    got_second_conn => \&got_second_conn,
     got_timeout     => \&got_timeout,
     test_max_queue  => \&test_max_queue,
   }
@@ -52,27 +52,23 @@ sub start {
   # pool is empty at this point.
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
       event   => "got_first_conn",
       context => "first",
     );
-
-    ok(!defined($conn), "first request deferred");
   }
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
-      event   => "got_second_conn",
+      event   => "got_first_conn",
       context => "second",
     );
-
-    ok(!defined($conn), "second request deferred");
   }
 }
 
@@ -80,22 +76,30 @@ sub got_first_conn {
   my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0];
 
   my $conn = delete $stuff->{connection};
-  ok(defined($conn), "first connection honored asynchronously");
+  my $which = $stuff->{context};
+  ok(defined($conn), "$which connection honored asynchronously");
+  if ($which eq 'first') {
+    ok(not (defined ($stuff->{from_cache})), "$which not from cache");
+  } else {
+    ok(defined ($stuff->{from_cache}), "$which from cache");
+  }
 
   $conn = undef;
 
   $kernel->yield("test_max_queue");
 }
 
-sub got_second_conn {
+sub got_third_conn {
   my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0];
 
   my $conn = $stuff->{connection};
-  ok(defined($conn), "second connection honored asynchronously");
+  my $which = $stuff->{context};
+  ok(
+		defined($stuff->{from_cache}),
+		"$which connection request honored from pool"
+	);
 
   $conn = undef;
-
-  $kernel->yield("test_max_queue");
 }
 
 # We need a free connection pool of 2 or more for this next test.  We
@@ -108,7 +112,7 @@ sub test_max_queue {
   $heap->{test_max_queue}++;
   return unless $heap->{test_max_queue} == 2;
 
-  my $conn = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
@@ -116,20 +120,13 @@ sub test_max_queue {
     context => "third",
   );
 
-  ok(defined($conn), "third connection request honored from pool");
-
-  my $other_conn = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => UNKNOWN_PORT,
     event   => "got_fourth_conn",
     context => "fourth",
   );
-
-  ok(!defined($other_conn), "fourth connection request deferred");
-
-  # The allocated connection should self-destruct when it falls out of
-  # scope.
 }
 
 # This connection should fail, actually.

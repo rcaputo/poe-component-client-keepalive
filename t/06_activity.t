@@ -6,7 +6,7 @@
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
-use Test::More tests => 4;
+use Test::More tests => 5;
 
 sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
@@ -25,6 +25,7 @@ POE::Session->create(
     _stop              => sub { },
     check_for_input    => \&check_for_input,
     got_conn           => \&got_conn,
+    got_conn2           => \&got_conn2,
     got_error          => \&got_error,
     got_input          => \&got_input,
     got_timeout        => \&got_timeout,
@@ -38,15 +39,13 @@ sub start {
   $heap->{cm} = POE::Component::Client::Keepalive->new();
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
       event   => "got_conn",
       context => "first",
     );
-
-    ok(!defined($conn), "first connection request deferred");
   }
 }
 
@@ -54,7 +53,9 @@ sub got_conn {
   my ($heap, $stuff) = @_[HEAP, ARG0..$#_];
 
   my $conn = $stuff->{connection};
-  ok(defined($conn), "first connection established asynchronously");
+  my $which = $stuff->{context};
+  ok(defined($conn), "$which connection established asynchronously");
+  ok(not (defined ($stuff->{from_cache})), "$which connection request deferred");
 
   TestServer->send_something();
 
@@ -71,21 +72,28 @@ sub got_conn {
 sub check_for_input {
   my ($kernel, $heap) = @_[KERNEL, HEAP];
 
-  $heap->{conn} = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
-    event   => "got_conn",
+    event   => "got_conn2",
     context => "first",
   );
+
+  $kernel->delay(shutdown_server => 1);
+}
+
+sub got_conn2 {
+  my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0..$#_];
+
+  $heap->{conn} = $stuff->{connection};
+  is($stuff->{from_cache}, 'immediate', "second connection established synchronously");
 
   $heap->{conn}->start(
     InputEvent => "got_input",
   );
 
   ok(defined($heap->{conn}->wheel()), "connection contains a wheel");
-
-  $kernel->delay(shutdown_server => 1);
 }
 
 sub got_input {

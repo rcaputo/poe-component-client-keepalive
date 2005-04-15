@@ -8,7 +8,7 @@
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
@@ -28,7 +28,7 @@ POE::Session->create(
     got_error       => \&got_error,
     got_first_conn  => \&got_first_conn,
     got_fourth_conn => \&got_fourth_conn,
-    got_second_conn => \&got_second_conn,
+    got_third_conn => \&got_third_conn,
     got_timeout     => \&got_timeout,
     test_pool_alive => \&test_pool_alive,
   }
@@ -50,27 +50,23 @@ sub start {
   # pool is empty at this point.
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
       event   => "got_first_conn",
       context => "first",
     );
-
-    ok(!defined($conn), "first connection request deferred");
   }
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
-      event   => "got_second_conn",
+      event   => "got_first_conn",
       context => "second",
     );
-
-    ok(!defined($conn), "second connection request deferred");
   }
 }
 
@@ -78,18 +74,24 @@ sub got_first_conn {
   my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0];
 
   my $conn = $stuff->{connection};
-  ok(defined($conn), "first connection established asynchronously");
+  my $which = $stuff->{context};
+  ok(defined($conn), "$which connection established asynchronously");
+  if ($which eq 'first') {
+    ok(not (defined ($stuff->{from_cache})), "$which not from cache");
+  } else {
+    is($stuff->{from_cache}, 'deferred', "$which deferred from cache");
+  }
 
   $kernel->yield("test_pool_alive");
 }
 
-sub got_second_conn {
+sub got_third_conn {
   my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0];
 
   my $conn = $stuff->{connection};
-  ok(defined($conn), "second connection established asynchronously");
-
-  $kernel->yield("test_pool_alive");
+  my $which = $stuff->{context};
+  ok(defined($conn), "$which connection established asynchronously");
+  is($stuff->{from_cache}, 'immediate', "$which connection request honored from pool immediately");
 }
 
 # We need a free connection pool of 2 or more for this next test.  We
@@ -102,7 +104,7 @@ sub test_pool_alive {
   $heap->{test_pool_alive}++;
   return unless $heap->{test_pool_alive} == 2;
 
-  my $immediate_conn = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
@@ -110,17 +112,13 @@ sub test_pool_alive {
     context => "third",
   );
 
-  ok(defined($immediate_conn), "third connection request honored from pool");
-
-  my $delayed_conn = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
     event   => "got_fourth_conn",
     context => "fourth",
   );
-
-  ok(!defined($delayed_conn), "fourth connection request is deferred");
 }
 
 sub got_fourth_conn {
@@ -128,6 +126,7 @@ sub got_fourth_conn {
 
   my $conn = delete $stuff->{connection};
   ok(defined($conn), "fourth connection established asynchronously");
+  is ($stuff->{from_cache}, 'deferred', "connection from pool");
 
   $conn = undef;
 

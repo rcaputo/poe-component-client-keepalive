@@ -8,7 +8,7 @@
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
@@ -34,15 +34,13 @@ sub start {
 
   $heap->{cm} = POE::Component::Client::Keepalive->new();
 
-  my $connection = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
     event   => "got_conn",
     context => "first",
   );
-
-  ok(!defined($connection), "first request deferred");
 }
 
 sub got_conn{
@@ -50,22 +48,27 @@ sub got_conn{
 
   # The delete() ensures only one copy of the connection exists.
   my $connection = delete $stuff->{connection};
-  ok(defined($connection), "first request honored asynchronously");
+  my $which = $stuff->{context};
+  ok(defined($connection), "$which request honored asynchronously");
 
+  my $is_cached = $stuff->{from_cache};
   # Destroy the connection, freeing its socket.
   $connection = undef;
 
-  my $second_request = $heap->{cm}->allocate(
-    scheme  => "http",
-    addr    => "127.0.0.1",
-    port    => PORT,
-    event   => "die_die_die",
-    context => "second",
-  );
+  if ($which eq 'first') {
+    ok(not (defined ($is_cached)), "$which request not from cache");
+    $heap->{cm}->allocate(
+     scheme  => "http",
+     addr    => "127.0.0.1",
+     port    => PORT,
+     event   => "got_conn",
+     context => "second",
+    );
+  } elsif ($which eq 'second') {
+    ok(defined $is_cached, "$which request from cache");
+    TestServer->shutdown();
+  }
 
-  ok(defined($second_request), "connection reused immediately");
-
-  TestServer->shutdown();
 }
 
 POE::Kernel->run();

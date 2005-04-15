@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.01";
+$VERSION = "0.02";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
@@ -195,6 +195,7 @@ sub _ka_wake_up {
           port       => $request->[RQ_PORT],
           scheme     => $request->[RQ_SCHEME],
           connection => $existing_connection,
+					from_cache => "deferred",
         }
       );
       next;
@@ -290,10 +291,22 @@ sub allocate {
   my $conn_key = "$scheme:$address:$port";
 
   # If we have a connection pool for the scheme/address/port triple,
-  # then we can maybe return an available connection right away.
+  # then we can maybe post an available connection right away.
 
   my $existing_connection = $self->_check_free_pool($conn_key);
-  return $existing_connection if $existing_connection;
+  if (defined $existing_connection) {
+    $poe_kernel->post ($poe_kernel->get_active_session, $event =>
+			{
+				addr       => $address,
+				context    => $context,
+				port       => $port,
+				scheme     => $scheme,
+				connection => $existing_connection,
+				from_cache => "immediate",
+			}
+		);
+    return;
+  }
 
   # We can't honor the request immediately, so it's put into a queue.
   DEBUG and warn "enqueuing request for $conn_key";
@@ -661,7 +674,6 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
       got_conn  => \&got_conn,
       got_error => \&handle_error,
       got_input => \&handle_input,
-      use_conn  => \&use_conn,
     }
   );
 
@@ -671,7 +683,7 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
   sub start {
     $_[HEAP]->{ka} = POE::Component::Client::Keepalive->new();
 
-    my $conn = $_[HEAP]->{ka}->allocate(
+    $_[HEAP]->{ka}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => 9999,
@@ -679,12 +691,6 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
       context => "arbitrary data (even a reference) here",
       timeout => 60,
     );
-
-    if (defined $conn) {
-      print "Connection was returned from keep-alive cache.\n";
-      $_[KERNEL]->yield(use_conn => $conn);
-      return;
-    }
 
     print "Connection is in progress.\n";
   }
@@ -696,8 +702,17 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
     my $context = $response->{context};
 
     if (defined $conn) {
-      print "Connection was established asynchronously.\n";
-      $kernel->yield(use_conn => $conn);
+			if ($response->{from_cache}) {
+				print "Connection was established immediately.\n";
+			}
+			else {
+				print "Connection was established asynchronously.\n";
+			}
+
+			$conn->start(
+				InputEvent => "got_input",
+				ErrorEvent => "got_error",
+			);
       return;
     }
 
@@ -705,16 +720,6 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
       "Connection could not be established: ",
       "$response->{function} error $response->{error_num}: ",
       "$response->{error_str}\n"
-    );
-  }
-
-  sub use_conn {
-    my ($heap, $conn) = @_[HEAP, ARG0];
-
-    $heap->{connection} = $conn;
-    $conn->start(
-      InputEvent => "got_input",
-      ErrorEvent => "got_error",
     );
   }
 
@@ -774,17 +779,18 @@ component holds a request before generating an error.
 
 =item allocate
 
-Allocate a new connection.  Allocate() will return a connection
-immediately if the keep-alive pool contains one matching the given
-scheme, address, and port.  Otherwise allocate() will return undef and
-begin establishing a connection asynchronously.  A message will be
-posted back to the requesting session when the connection status is
-finally known.
+Allocate a new connection.  Allocate() will return immediately.  The
+allocated connection, however, will be posted back to the requesting
+session.  This happens even if the connection was found in the
+component's keep-alive cache.
 
 Allocate() requires five parameters and has an optional sixth.
 
 Specify the scheme that will be used to communicate on the connection
-(typically http or https).  The scheme is required.
+(typically http or https).  The scheme is required, but you're free to
+make something up here.  It's used internally to differentiate
+different types of socket (e.g., ssl vs. cleartext) on the same
+address and port.
 
   scheme  => $connection_scheme,
 
@@ -795,13 +801,12 @@ and port must be numeric.  Both the address and port are required.
   port    => $remote_port,
 
 Specify an name of the event to post when an asynchronous response is
-ready.  The response event is required, but it won't be used if
-allocate() can return a connection right away.
+ready.  This is of course required.
 
   event   => $return_event,
 
 Set the connection timeout, in seconds.  The connection manager will
-return an error (ETIMEDOUT) if it can't establish a connection within
+post back an error message if it can't establish a connection within
 the requested time.  This parameter is optional.  It will default to
 the master timeout provided to the connection manager's constructor.
 
@@ -816,7 +821,7 @@ extremely handy, but it's optional.
 
 In summary:
 
-  my $connection = $mgr->allocate(
+  $mgr->allocate(
     scheme   => "http",
     address  => "127.0.0.1",
     port     => 80,
@@ -844,6 +849,18 @@ One field returns the connection object if the connection was
 successful, or undef if there was a failure:
 
   $response{connection} = $new_socket_handle;
+
+On success, another field tells you whether the connection contains
+all new materials.  That is, whether the connection has been recycled
+from the component's cache or created anew.
+
+  $response{from_cache} = $status;
+
+The from_cache status may be "immediate" if the connection was
+immediately available from the cache.  It will be "deferred" if the
+connection was reused, but another user had to release it first.
+Finally, from_cache will be false if the connection had to be created
+to satisfy allocate().
 
 Three other fields return error information if the connection failed.
 They are not present if the connection was successful.

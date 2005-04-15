@@ -46,27 +46,23 @@ sub start {
   $heap->{conn_count} = 0;
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
       event   => "got_conn",
       context => "first",
     );
-
-    ok(!defined($conn), "first connection request deferred");
   }
 
   {
-    my $conn = $heap->{cm}->allocate(
+    $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => PORT,
       event   => "got_conn",
       context => "second",
     );
-
-    ok(!defined($conn), "second connection request deferred");
   }
 }
 
@@ -76,6 +72,7 @@ sub got_conn {
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
   ok(defined($conn), "$which connection established asynchronously");
+  ok(!defined($stuff->{from_cache}), "$which connection request deferred");
 
   $conn = undef;
 
@@ -83,7 +80,7 @@ sub got_conn {
 
   # Re-allocate one of the connections.
 
-  my $third = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => PORT,
@@ -91,17 +88,14 @@ sub got_conn {
     context => "third",
   );
 
-  ok(defined($third), "third connection request honored from pool");
 
-  my $fourth = $heap->{cm}->allocate(
+  $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
     port    => ANOTHER_PORT,
     event   => "got_another_conn",
     context => "fourth",
   );
-
-  ok(!defined($fourth), "fourth connection request deferred");
 }
 
 sub got_another_conn {
@@ -110,14 +104,31 @@ sub got_another_conn {
   # Deleting here to avoid a copy of the connection in %$stuff.
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
-  ok(defined($conn), "$which connection established asynchronously");
 
-  # Free the connection so it doesn't cause fatal ASSERT errors when
-  # it's freed after its connection manager.
-  $conn = undef;
+	if ($which eq 'third') {
+		is(
+			$stuff->{from_cache}, 'immediate',
+			"$which connection request honored from pool"
+		);
+		return;
+	}
 
-  TestServer->shutdown();
-  $heap->{cm}->shutdown();
+	if ($which eq 'fourth') {
+		ok(
+			!defined ($stuff->{from_cache}),
+			"$which connection request honored from pool"
+		);
+		ok(defined($conn), "$which connection established asynchronously");
+
+		# Free the connection first.
+		$conn = undef;
+
+		TestServer->shutdown();
+		$heap->{cm}->shutdown();
+		return;
+	}
+
+	die;
 }
 
 POE::Kernel->run();
