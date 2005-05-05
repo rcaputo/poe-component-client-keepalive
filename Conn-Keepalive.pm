@@ -38,6 +38,7 @@ sub new {
 
 sub DESTROY {
   my $self = shift;
+  $self->[CK_WHEEL] = undef;
   $self->[CK_MANAGER]->free($self->[CK_SOCKET]);
 }
 
