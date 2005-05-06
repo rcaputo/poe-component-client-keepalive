@@ -52,7 +52,7 @@ sub start {
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "127.0.0.1",
+      addr    => "localhost",
       port    => PORT,
       event   => "got_first_conn",
       context => "first",
@@ -62,7 +62,7 @@ sub start {
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "127.0.0.1",
+      addr    => "localhost",
       port    => PORT,
       event   => "got_first_conn",
       context => "second",
@@ -106,7 +106,7 @@ sub test_pool_alive {
 
   $heap->{cm}->allocate(
     scheme  => "http",
-    addr    => "127.0.0.1",
+    addr    => "localhost",
     port    => PORT,
     event   => "got_third_conn",
     context => "third",
@@ -114,7 +114,7 @@ sub test_pool_alive {
 
   $heap->{cm}->allocate(
     scheme  => "http",
-    addr    => "127.0.0.1",
+    addr    => "localhost",
     port    => PORT,
     event   => "got_fourth_conn",
     context => "fourth",

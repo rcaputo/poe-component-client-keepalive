@@ -36,7 +36,7 @@ sub start {
 
   $heap->{cm}->allocate(
     scheme  => "http",
-    addr    => "127.0.0.1",
+    addr    => "localhost",
     port    => PORT,
     event   => "got_conn",
     context => "first",
@@ -59,7 +59,7 @@ sub got_conn{
     ok(not (defined ($is_cached)), "$which request not from cache");
     $heap->{cm}->allocate(
      scheme  => "http",
-     addr    => "127.0.0.1",
+     addr    => "localhost",
      port    => PORT,
      event   => "got_conn",
      context => "second",

@@ -41,7 +41,7 @@ sub start {
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "127.0.0.1",
+      addr    => "localhost",
       port    => PORT,
       event   => "got_conn",
       context => "first",
@@ -74,7 +74,7 @@ sub check_for_input {
 
   $heap->{cm}->allocate(
     scheme  => "http",
-    addr    => "127.0.0.1",
+    addr    => "localhost",
     port    => PORT,
     event   => "got_conn2",
     context => "first",

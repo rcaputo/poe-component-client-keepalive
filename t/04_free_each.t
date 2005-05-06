@@ -44,7 +44,7 @@ sub start {
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "127.0.0.1",
+      addr    => "localhost",
       port    => PORT,
       event   => "got_conn",
       context => "first",
@@ -54,7 +54,7 @@ sub start {
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "127.0.0.1",
+      addr    => "localhost",
       port    => PORT,
       event   => "got_conn",
       context => "second",
@@ -90,7 +90,7 @@ sub test_alloc {
 
   $heap->{cm}->allocate(
     scheme  => "http",
-    addr    => "127.0.0.1",
+    addr    => "localhost",
     port    => PORT,
     event   => "and_free",
     context => "third",
