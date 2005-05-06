@@ -43,7 +43,7 @@ sub discard_client_input {
 
 sub send_something {
   foreach my $client (keys %clients) {
-    $poe_kernel->post($client, "send_something");
+    $poe_kernel->call($client, "send_something");
   }
 }
 
