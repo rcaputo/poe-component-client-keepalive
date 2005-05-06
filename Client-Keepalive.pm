@@ -477,6 +477,8 @@ sub _ka_conn_success {
 sub free {
   my ($self, $socket) = @_;
 
+  DEBUG and warn "freeing socket";
+
   # Remove the accompanying SF_USED record.
   croak "can't free() undefined socket" unless defined $socket;
   my $used = delete $self->[SF_USED]{$socket};
@@ -555,18 +557,43 @@ sub _ka_reclaim_socket {
   my $request_key = $used->[USED_KEY];
   $self->_decrement_used_each($request_key);
 
-  # Watch the socket, and set a keep-alive timeout.
-  $kernel->select_read($socket, "ka_socket_activity");
-  my $timer_id = $kernel->delay_set(
-    ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
-  );
 
-  # Record the socket as free to be used.
-  $self->[SF_POOL]{$request_key}{$socket} = $socket;
-  $self->[SF_SOCKETS]{$socket} = [
-    $request_key,       # SK_KEY
-    $timer_id,          # SK_TIMER
-  ];
+  # only try to reuse it if it still works
+  my ($nfound, $status);
+  {
+    DEBUG and warn "checking if socket still works";
+    my $rin = '';
+    vec($rin, fileno ($socket), 1) = 1;
+    my ($rout, $eout);
+    $nfound = select ($rout=$rin, undef, $eout=$rin, 0);
+    DEBUG and warn "select results: $nfound";
+
+    if ($nfound) {
+      use bytes;
+      DEBUG and warn "uh oh, socket activity";
+      $status = sysread($socket, my $buf = "", 65536);
+      if (DEBUG and defined $status) {
+	warn "read $status bytes. 0 means EOF";
+      }
+    }
+  }
+
+  if (!$nfound or $status != 0) {
+    DEBUG and warn "reclaiming socket";
+
+    # Watch the socket, and set a keep-alive timeout.
+    $kernel->select_read($socket, "ka_socket_activity");
+    my $timer_id = $kernel->delay_set(
+      ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
+    );
+
+    # Record the socket as free to be used.
+    $self->[SF_POOL]{$request_key}{$socket} = $socket;
+    $self->[SF_SOCKETS]{$socket} = [
+      $request_key,       # SK_KEY
+      $timer_id,          # SK_TIMER
+    ];
+  }
 
   goto &_ka_wake_up;
 }
@@ -617,9 +644,16 @@ sub _ka_shutdown {
 sub _ka_socket_activity {
   my ($self, $kernel, $socket) = @_[OBJECT, KERNEL, ARG0];
 
+  if (DEBUG) {
+    my $socket_rec = $self->[SF_SOCKETS]{$socket};
+    my $key = $socket_rec->[SK_KEY];
+    warn "CON: Got activity on socket for $key";
+  }
+
   use bytes;
   return if sysread($socket, my $buf = "", 65536);
 
+  DEBUG and warn "CON: socket got EOF or an error. removing it from the pool";
   $self->_remove_socket_from_pool($socket);
 }
 
@@ -745,6 +779,7 @@ sub _remove_socket_from_pool {
   my $key = $socket_rec->[SK_KEY];
 
   # Get the blessed version.
+  DEBUG and warn "removing socket for $key";
   $socket = delete $self->[SF_POOL]{$key}{$socket};
 
   unless (keys %{$self->[SF_POOL]{$key}}) {
