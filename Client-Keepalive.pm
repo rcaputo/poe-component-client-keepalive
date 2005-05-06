@@ -663,6 +663,7 @@ sub _ka_dns_response {
   # No response.
   unless (defined $response_object) {
     foreach my $request (@$requests) {
+      $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
       $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT] =>
 	  _error_response ($request, "resolve", undef, $response_error),
 	);
@@ -690,6 +691,7 @@ sub _ka_dns_response {
   # Didn't return here.  No address record for the host?
   foreach my $request (@$requests) {
     DEBUG and warn "DNS: $request_address does not resolve";
+    $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
     $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT],
 	_error_response ($request, "resolve", undef, "Host has no address."),
       );
