@@ -15,6 +15,7 @@ use POE;
 use POE::Wheel::SocketFactory;
 use POE::Component::Connection::Keepalive;
 use POE::Component::Client::DNS;
+use POE::Component::SSLify qw( Client_SSLify);
 
 use constant DEBUG => 0;
 
@@ -438,6 +439,10 @@ sub _ka_conn_success {
   # Remove the SF_USED placeholder, add in the socket, and store it
   # properly.
   my $used = delete $self->[SF_USED]{$wheel_id};
+
+  if ($request->[RQ_SCHEME] eq 'https') {
+    $socket = Client_SSLify ($socket);
+  }
 
   $used->[USED_SOCKET] = $socket;
 
