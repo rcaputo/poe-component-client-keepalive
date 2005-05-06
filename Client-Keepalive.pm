@@ -365,6 +365,9 @@ sub _ka_set_timeout {
 sub _ka_request_timeout {
   my ($self, $kernel, $request) = @_[OBJECT, KERNEL, ARG0];
 
+  DEBUG and
+    warn "CON: request from session", $request->[RQ_SESSION]->ID,
+	 " for address ", $request->[RQ_ADDRESS], " timed out";
   $! = ETIMEDOUT;
 
   # The easiest way to do this?  Simulate an error from the wheel
@@ -397,6 +400,7 @@ sub _ka_request_timeout {
 sub _ka_conn_failure {
   my ($self, $func, $errnum, $errstr, $wheel_id) = @_[OBJECT, ARG0..ARG3];
 
+  DEBUG and warn "CON: sending $errstr for function $func";
   # Remove the SF_WHEELS record.
   my $wheel_rec = delete $self->[SF_WHEELS]{$wheel_id};
   my $request   = $wheel_rec->[WHEEL_REQUEST];
@@ -672,7 +676,7 @@ sub _ka_dns_response {
     #next unless $answer->type eq "A";
 
     DEBUG and
-      warn "DNS: $request_address resolves to ", $answer->rdatastr, "\n";
+      warn "DNS: $request_address resolves to ", $answer->rdatastr;
 
     foreach my $request (@$requests) {
       $request->[RQ_IP] = $answer->rdatastr;
@@ -684,9 +688,8 @@ sub _ka_dns_response {
   }
 
   # Didn't return here.  No address record for the host?
-  foreach my $request_id (@$requests) {
-    DEBUG and warn "I/O: removing request $request_id";
-    my $request = delete $heap->{request}->{$request_id};
+  foreach my $request (@$requests) {
+    DEBUG and warn "DNS: $request_address does not resolve";
     $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT],
 	_error_response ($request, "resolve", undef, "Host has no address."),
       );
