@@ -48,7 +48,6 @@ sub send_something {
 }
 
 sub internal_send_something {
-  return unless $_[HEAP]->{client};
   $_[HEAP]->{client}->put(scalar localtime);
 }
 
@@ -60,7 +59,7 @@ sub shutdown {
 
 sub shutdown_clients {
   foreach my $session (keys(%clients)) {
-    $poe_kernel->post($session => "shutdown");
+    $poe_kernel->call($session => "shutdown");
   }
 }
 

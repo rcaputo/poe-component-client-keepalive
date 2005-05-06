@@ -109,18 +109,24 @@ sub cleanup {
 }
 
 sub error {
+  my $heap = $_[HEAP];
 TODO: {
     local $TODO = "'because'";
-    is ($_[HEAP]->{wheelid}, $_[HEAP]->{conn}->wheel->ID, "eof arrives at same wheel");
-    delete $_[HEAP]->{wheelid};
+    is ($heap->{wheelid}, $heap->{conn}->wheel->ID, "eof arrives at same wheel");
   }
+  delete $_[HEAP]->{wheelid};
+  $heap->{conn}->wheel->shutdown_input;
+  $heap->{conn}->wheel->shutdown_output;
+  delete $heap->{conn};
 }
 
 sub input {
+  $_[HEAP]->{wheelid} = $_[ARG1];
 TODO: {
     local $TODO = "'because'";
     ok (1, "input arrives from new socket");
   }
+  TestServer->shutdown_clients;
 }
 POE::Kernel->run();
 exit;
