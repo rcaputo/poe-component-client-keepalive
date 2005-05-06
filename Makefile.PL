@@ -16,8 +16,9 @@ WriteMakefile(
     'Conn-Keepalive.pm'   => '$(INST_LIBDIR)/../Connection/Keepalive.pm',
   },
   PREREQ_PM    => {
-    'POE' => 0.29,
+    'POE'                         => 0.31,
     'POE::Component::Client::DNS' => 0.98,
+		'POE::Component::SSLify'      => 0.04,
   },
   dist         => {
     COMPRESS   => 'gzip -9f',
