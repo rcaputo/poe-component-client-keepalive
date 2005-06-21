@@ -3,7 +3,6 @@ CHANGES
 Client-Keepalive.pm
 Conn-Keepalive.pm
 MANIFEST
-META.yml                                 Module meta-data (added by MakeMaker)
 Makefile.PL
 README
 mylib/TestServer.pm
