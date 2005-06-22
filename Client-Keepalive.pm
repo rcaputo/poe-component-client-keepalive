@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.02";
+$VERSION = "0.03";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
@@ -107,7 +107,7 @@ sub new {
     { },                # SF_SOCKETS
     $keep_alive,        # SF_KEEPALIVE
     $timeout,           # SF_TIMEOUT
-    undef,		# SF_RESOLVER
+    undef,    # SF_RESOLVER
   ], $class;
 
   unless (defined $resolver) {
@@ -132,9 +132,9 @@ sub new {
         ka_socket_activity   => "_ka_socket_activity",
         ka_keepalive_timeout => "_ka_keepalive_timeout",
         ka_wake_up           => "_ka_wake_up",
-	ka_resolve_request   => "_ka_resolve_request",
-	ka_add_to_queue	     => "_ka_add_to_queue",
-	ka_dns_response	     => "_ka_dns_response",
+  ka_resolve_request   => "_ka_resolve_request",
+  ka_add_to_queue       => "_ka_add_to_queue",
+  ka_dns_response       => "_ka_dns_response",
       },
     ],
   );
@@ -315,15 +315,15 @@ sub allocate {
   my $existing_connection = $self->_check_free_pool($conn_key);
   if (defined $existing_connection) {
     $poe_kernel->post ($poe_kernel->get_active_session, $event =>
-			{
-				addr       => $address,
-				context    => $context,
-				port       => $port,
-				scheme     => $scheme,
-				connection => $existing_connection,
-				from_cache => "immediate",
-			}
-		);
+      {
+        addr       => $address,
+        context    => $context,
+        port       => $port,
+        scheme     => $scheme,
+        connection => $existing_connection,
+        from_cache => "immediate",
+      }
+    );
     return;
   }
 
@@ -335,7 +335,7 @@ sub allocate {
     $event,     # RQ_EVENT
     $scheme,    # RQ_SCHEME
     $address,   # RQ_ADDRESS
-    undef,	# RQ_IP
+    undef,  # RQ_IP
     $port,      # RQ_PORT
     $conn_key,  # RQ_CONN_KEY
     $context,   # RQ_CONTEXT
@@ -368,7 +368,7 @@ sub _ka_request_timeout {
 
   DEBUG and
     warn "CON: request from session", $request->[RQ_SESSION]->ID,
-	 " for address ", $request->[RQ_ADDRESS], " timed out";
+   " for address ", $request->[RQ_ADDRESS], " timed out";
   $! = ETIMEDOUT;
 
   # The easiest way to do this?  Simulate an error from the wheel
@@ -573,7 +573,7 @@ sub _ka_reclaim_socket {
       DEBUG and warn "uh oh, socket activity";
       $status = sysread($socket, my $buf = "", 65536);
       if (DEBUG and defined $status) {
-	warn "read $status bytes. 0 means EOF";
+  warn "read $status bytes. 0 means EOF";
       }
     }
   }
@@ -671,13 +671,13 @@ sub _ka_resolve_request {
       $heap->{resolve}->{$host} = [ $request ];
 
       my $response = $self->[SF_RESOLVER]->resolve(
-	  event => 'ka_dns_response',
-	  host => $host,
-	  context => 1,
-	);
-	
+    event => 'ka_dns_response',
+    host => $host,
+    context => 1,
+  );
+  
       if ($response) {
-	$kernel->yield (ka_dns_response => $response);
+  $kernel->yield (ka_dns_response => $response);
       }
     }
   } else {
@@ -704,8 +704,8 @@ sub _ka_dns_response {
     foreach my $request (@$requests) {
       $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
       $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT] =>
-	  _error_response ($request, "resolve", undef, $response_error),
-	);
+    _error_response ($request, "resolve", undef, $response_error),
+  );
     }
     return;
   }
@@ -732,7 +732,7 @@ sub _ka_dns_response {
     DEBUG and warn "DNS: $request_address does not resolve";
     $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
     $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT],
-	_error_response ($request, "resolve", undef, "Host has no address."),
+  _error_response ($request, "resolve", undef, "Host has no address."),
       );
   }
 }
@@ -858,17 +858,17 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
     my $context = $response->{context};
 
     if (defined $conn) {
-			if ($response->{from_cache}) {
-				print "Connection was established immediately.\n";
-			}
-			else {
-				print "Connection was established asynchronously.\n";
-			}
+      if ($response->{from_cache}) {
+        print "Connection was established immediately.\n";
+      }
+      else {
+        print "Connection was established asynchronously.\n";
+      }
 
-			$conn->start(
-				InputEvent => "got_input",
-				ErrorEvent => "got_error",
-			);
+      $conn->start(
+        InputEvent => "got_input",
+        ErrorEvent => "got_error",
+      );
       return;
     }
 
