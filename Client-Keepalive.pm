@@ -107,7 +107,7 @@ sub new {
     { },                # SF_SOCKETS
     $keep_alive,        # SF_KEEPALIVE
     $timeout,           # SF_TIMEOUT
-    undef,    # SF_RESOLVER
+    undef,              # SF_RESOLVER
   ], $class;
 
   unless (defined $resolver) {
