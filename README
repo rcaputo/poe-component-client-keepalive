@@ -1,11 +1,7 @@
-Client-Keepalive(3)   User Contributed Perl Documentation  Client-Keepalive(3)
-
-
-
-NNAAMMEE
+NAME
        POE::Component::Client::Keepalive - manage connections, with keep-alive
 
-SSYYNNOOPPSSIISS
+SYNOPSIS
          use warnings;
          use strict;
 
@@ -18,7 +14,6 @@ SSYYNNOOPPSSIISS
              got_conn  => \&got_conn,
              got_error => \&handle_error,
              got_input => \&handle_input,
-             use_conn  => \&use_conn,
            }
          );
 
@@ -26,9 +21,9 @@ SSYYNNOOPPSSIISS
          exit;
 
          sub start {
-           $_[HEAP]->{cm} = POE::Component::Client::Keepalive->new();
+           $_[HEAP]->{ka} = POE::Component::Client::Keepalive->new();
 
-           my $conn = $_[HEAP]->{cm}->allocate(
+           $_[HEAP]->{ka}->allocate(
              scheme  => "http",
              addr    => "127.0.0.1",
              port    => 9999,
@@ -36,12 +31,6 @@ SSYYNNOOPPSSIISS
              context => "arbitrary data (even a reference) here",
              timeout => 60,
            );
-
-           if (defined $conn) {
-             print "Connection was returned from keep-alive cache.\n";
-             $_[KERNEL]->yield(use_conn => $conn);
-             return;
-           }
 
            print "Connection is in progress.\n";
          }
@@ -53,8 +42,17 @@ SSYYNNOOPPSSIISS
            my $context = $response->{context};
 
            if (defined $conn) {
-             print "Connection was established asynchronously.\n";
-             $kernel->yield(use_conn => $conn);
+             if ($response->{from_cache}) {
+               print "Connection was established immediately.\n";
+             }
+             else {
+               print "Connection was established asynchronously.\n";
+             }
+
+             $conn->start(
+               InputEvent => "got_input",
+               ErrorEvent => "got_error",
+             );
              return;
            }
 
@@ -62,16 +60,6 @@ SSYYNNOOPPSSIISS
              "Connection could not be established: ",
              "$response->{function} error $response->{error_num}: ",
              "$response->{error_str}\n"
-           );
-         }
-
-         sub use_conn {
-           my ($heap, $conn) = @_[HEAP, ARG0];
-
-           $heap->{connection} = $conn;
-           $conn->start(
-             InputEvent => "got_input",
-             ErrorEvent => "got_error",
            );
          }
 
@@ -83,10 +71,10 @@ SSYYNNOOPPSSIISS
          sub handle_error {
            my $heap = $_[HEAP];
            delete $heap->{connection};
-           $heap->{cm}->shutdown();
+           $heap->{ka}->shutdown();
          }
 
-DDEESSCCRRIIPPTTIIOONN
+DESCRIPTION
        POE::Component::Client::Keepalive creates and manages connections for
        other components.  It maintains a cache of kept-alive connections for
        quick reuse.  It is written specifically for clients that can benefit
@@ -100,7 +88,7 @@ DDEESSCCRRIIPPTTIIOONN
          possible to overrun your file descriptors for a process if you're not
          careful.
 
-         _n_e_w_(_) takes up to four parameters.  All of them are optional.
+         new() takes up to four parameters.  All of them are optional.
 
          To limit the number of simultaneous connections to a particular host
          (defined by a combination of scheme, address and port):
@@ -113,7 +101,7 @@ DDEESSCCRRIIPPTTIIOONN
            max_open     => $maximum_open_connections, # defaults to 128
 
          Programs are required to give connections back to the manager when
-         they are done.  See the _f_r_e_e_(_) method for how that works.  The con-
+         they are done.  See the free() method for how that works.  The con-
          nection manager will keep connections alive for a period of time
          before recycling them.  The maximum keep-alive time may be set with
 
@@ -126,17 +114,18 @@ DDEESSCCRRIIPPTTIIOONN
            timeout      => $seconds_to_process_a_request, # defaults to 120
 
        allocate
-         Allocate a new connection.  _A_l_l_o_c_a_t_e_(_) will return a connection imme-
-         diately if the keep-alive pool contains one matching the given
-         scheme, address, and port.  Otherwise _a_l_l_o_c_a_t_e_(_) will return undef
-         and begin establishing a connection asynchronously.  A message will
-         be posted back to the requesting session when the connection status
-         is finally known.
+         Allocate a new connection.  Allocate() will return immediately.  The
+         allocated connection, however, will be posted back to the requesting
+         session.  This happens even if the connection was found in the compo-
+         nent's keep-alive cache.
 
-         _A_l_l_o_c_a_t_e_(_) requires five parameters and has an optional sixth.
+         Allocate() requires five parameters and has an optional sixth.
 
          Specify the scheme that will be used to communicate on the connection
-         (typically http or https).  The scheme is required.
+         (typically http or https).  The scheme is required, but you're free
+         to make something up here.  It's used internally to differentiate
+         different types of socket (e.g., ssl vs. cleartext) on the same
+         address and port.
 
            scheme  => $connection_scheme,
 
@@ -147,13 +136,12 @@ DDEESSCCRRIIPPTTIIOONN
            port    => $remote_port,
 
          Specify an name of the event to post when an asynchronous response is
-         ready.  The response event is required, but it won't be used if _a_l_l_o_-
-         _c_a_t_e_(_) can return a connection right away.
+         ready.  This is of course required.
 
            event   => $return_event,
 
          Set the connection timeout, in seconds.  The connection manager will
-         return an error (ETIMEDOUT) if it can't establish a connection within
+         post back an error message if it can't establish a connection within
          the requested time.  This parameter is optional.  It will default to
          the master timeout provided to the connection manager's constructor.
 
@@ -161,14 +149,14 @@ DDEESSCCRRIIPPTTIIOONN
 
          Specify additional contextual data.  The context defines the connec-
          tion's purpose.  It is used to maintain continuity between a call to
-         _a_l_l_o_c_a_t_e_(_) and an asynchronous response.  A context is extremely
+         allocate() and an asynchronous response.  A context is extremely
          handy, but it's optional.
 
            context => $context_data,
 
          In summary:
 
-           my $connection = $mgr->allocate(
+           $mgr->allocate(
              scheme   => "http",
              address  => "127.0.0.1",
              port     => 80,
@@ -197,6 +185,18 @@ DDEESSCCRRIIPPTTIIOONN
 
            $response{connection} = $new_socket_handle;
 
+         On success, another field tells you whether the connection contains
+         all new materials.  That is, whether the connection has been recycled
+         from the component's cache or created anew.
+
+           $response{from_cache} = $status;
+
+         The from_cache status may be "immediate" if the connection was imme-
+         diately available from the cache.  It will be "deferred" if the con-
+         nection was reused, but another user had to release it first.
+         Finally, from_cache will be false if the connection had to be created
+         to satisfy allocate().
+
          Three other fields return error information if the connection failed.
          They are not present if the connection was successful.
 
@@ -205,44 +205,42 @@ DDEESSCCRRIIPPTTIIOONN
            $response{error_str}  = $! as a string;
 
        free
-         _F_r_e_e_(_) notifies the connection manager when connections are free to
+         Free() notifies the connection manager when connections are free to
          be reused.  Freed connections are entered into the keep-alive pool
-         and may be returned by subsequent _a_l_l_o_c_a_t_e_(_) calls.
+         and may be returned by subsequent allocate() calls.
 
            $mgr->free($socket);
 
-         For now _f_r_e_e_(_) is called with a socket, not a connection object.
+         For now free() is called with a socket, not a connection object.
          This is usually not a problem since POE::Component::Connec-
-         tion::Keepalive objects call _f_r_e_e_(_) for you when they are destroyed.
+         tion::Keepalive objects call free() for you when they are destroyed.
 
-         Not calling _f_r_e_e_(_) will cause a program to leak connections.  This is
-         also not generally a problem, since _f_r_e_e_(_) is called automatically
+         Not calling free() will cause a program to leak connections.  This is
+         also not generally a problem, since free() is called automatically
          whenever connection objects are destroyed.
 
        shutdown
          The keep-alive pool requires connections to be active internally.
          This may keep a program active even when all connections are idle.
-         The _s_h_u_t_d_o_w_n_(_) method forces the connection manager to clear its
+         The shutdown() method forces the connection manager to clear its
          keep-alive pool, allowing a program to terminate gracefully.
 
            $mgr->shutdown();
 
-SSEEEE AALLSSOO
+SEE ALSO
        POE POE::Component::Connection::Keepalive
 
-BBUUGGSS
-       None known.
+BUGS
+       http://rt.cpan.org/NoAuth/Bugs.html?Dist=POE-Component-Client-Keepalive
+       tracks the known issues with this component.  You can add to them by
+       sending mail to bug-poe-component-client-keepalive@rt.cpan.org.
 
-LLIICCEENNSSEE
+LICENSE
        This distribution is copyright 2004 by Rocco Caputo.  All rights are
        reserved.  This distribution is free software; you may redistribute it
        and/or modify it under the same terms as Perl itself.
 
-AAUUTTHHOORR
+AUTHOR
        Rocco Caputo <rcaputo@cpan.org>
 
        Special thanks to Rob Bloodgood.
-
-
-
-perl v5.8.4                       2004-10-03               Client-Keepalive(3)
