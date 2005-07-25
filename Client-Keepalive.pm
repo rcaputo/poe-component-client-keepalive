@@ -132,9 +132,9 @@ sub new {
         ka_socket_activity   => "_ka_socket_activity",
         ka_keepalive_timeout => "_ka_keepalive_timeout",
         ka_wake_up           => "_ka_wake_up",
-  ka_resolve_request   => "_ka_resolve_request",
-  ka_add_to_queue       => "_ka_add_to_queue",
-  ka_dns_response       => "_ka_dns_response",
+        ka_resolve_request   => "_ka_resolve_request",
+        ka_add_to_queue      => "_ka_add_to_queue",
+        ka_dns_response      => "_ka_dns_response",
       },
     ],
   );
@@ -345,7 +345,7 @@ sub allocate {
     undef,      # RQ_WHEEL_ID
   ];
 
-  $poe_kernel->call("$self", "ka_set_timeout", $request);
+  $poe_kernel->call("$self", ka_set_timeout     => $request);
   $poe_kernel->post("$self", ka_resolve_request => $request);
 
   return;
@@ -573,7 +573,7 @@ sub _ka_reclaim_socket {
       DEBUG and warn "uh oh, socket activity";
       $status = sysread($socket, my $buf = "", 65536);
       if (DEBUG and defined $status) {
-  warn "read $status bytes. 0 means EOF";
+        warn "read $status bytes. 0 means EOF";
       }
     }
   }
@@ -671,13 +671,13 @@ sub _ka_resolve_request {
       $heap->{resolve}->{$host} = [ $request ];
 
       my $response = $self->[SF_RESOLVER]->resolve(
-    event => 'ka_dns_response',
-    host => $host,
-    context => 1,
-  );
-  
+        event => 'ka_dns_response',
+        host => $host,
+        context => 1,
+      );
+
       if ($response) {
-  $kernel->yield (ka_dns_response => $response);
+        $kernel->yield (ka_dns_response => $response);
       }
     }
   } else {
@@ -703,9 +703,10 @@ sub _ka_dns_response {
   unless (defined $response_object) {
     foreach my $request (@$requests) {
       $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
-      $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT] =>
-    _error_response ($request, "resolve", undef, $response_error),
-  );
+      $kernel->post (
+        $request->[RQ_SESSION], $request->[RQ_EVENT] =>
+        _error_response ($request, "resolve", undef, $response_error),
+      );
     }
     return;
   }
@@ -731,9 +732,10 @@ sub _ka_dns_response {
   foreach my $request (@$requests) {
     DEBUG and warn "DNS: $request_address does not resolve";
     $kernel->alarm_remove ($request->[RQ_TIMER_ID]);
-    $kernel->post ($request->[RQ_SESSION], $request->[RQ_EVENT],
-  _error_response ($request, "resolve", undef, "Host has no address."),
-      );
+    $kernel->post (
+      $request->[RQ_SESSION], $request->[RQ_EVENT],
+      _error_response ($request, "resolve", undef, "Host has no address."),
+    );
   }
 }
 
