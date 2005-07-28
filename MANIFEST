@@ -18,3 +18,4 @@ t/08_quick_reuse.t
 t/09_timeout.t
 t/10_resolver.t
 t/11_dead_socket.t
+t/50_bisbee_timeout.t

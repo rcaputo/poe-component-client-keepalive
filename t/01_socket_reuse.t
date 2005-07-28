@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # $Id$
+# vim: filetype=perl
 
 # Test connection reuse.  Allocates a connection, frees it, and
 # allocates another.  The second allocation should return right away

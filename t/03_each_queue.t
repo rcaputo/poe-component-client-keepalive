@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # $Id$
+# vim: filetype=perl
 
 # Test connection queuing.  Set the per-connection queue to be really
 # small (one in all), and then try to allocate two connections.  The
