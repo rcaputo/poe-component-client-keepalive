@@ -17,7 +17,7 @@ WriteMakefile(
   },
   PREREQ_PM    => {
     'POE'                         => 0.31,
-    'POE::Component::Client::DNS' => 0.98,
+    'POE::Component::Client::DNS' => 0.9801,
     'POE::Component::SSLify'      => 0.04,
   },
   dist         => {
