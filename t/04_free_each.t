@@ -75,6 +75,11 @@ sub got_conn {
 
   return unless keys(%{$heap->{conn}}) == 2;
 
+	# Shut this one down.
+	$heap->{conn}{$which}->start();
+	$heap->{conn}{$which}->wheel()->shutdown_input();
+	$heap->{conn}{$which}->wheel()->shutdown_output();
+
   # Free all heaped connections.
   delete $heap->{conn};
 
@@ -110,6 +115,9 @@ sub and_free {
 	);
 
 	# Free the connection first.
+	# Close its internal socket before freeing.  This will ensure that
+	# the connection manager can cope with such things.
+	close $conn->[POE::Component::Connection::Keepalive::CK_SOCKET];
 	$conn = undef;
 
   TestServer->shutdown();

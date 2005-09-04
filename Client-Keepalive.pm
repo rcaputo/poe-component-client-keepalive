@@ -524,13 +524,12 @@ sub _ka_reclaim_socket {
   my $request_key = $used->[USED_KEY];
   $self->_decrement_used_each($request_key);
 
-
   # only try to reuse it if it still works
   my ($nfound, $status);
-  {
+  if (defined fileno($socket)) {
     DEBUG and warn "checking if socket still works";
     my $rin = '';
-    vec($rin, fileno ($socket), 1) = 1;
+    vec($rin, fileno($socket), 1) = 1;
     my ($rout, $eout);
     $nfound = select ($rout=$rin, undef, $eout=$rin, 0);
     DEBUG and warn "select results: $nfound";
@@ -543,23 +542,26 @@ sub _ka_reclaim_socket {
         warn "read $status bytes. 0 means EOF";
       }
     }
+
+    if (!$nfound or $status != 0) {
+      DEBUG and warn "reclaiming socket";
+
+      # Watch the socket, and set a keep-alive timeout.
+      $kernel->select_read($socket, "ka_socket_activity");
+      my $timer_id = $kernel->delay_set(
+        ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
+      );
+
+      # Record the socket as free to be used.
+      $self->[SF_POOL]{$request_key}{$socket} = $socket;
+      $self->[SF_SOCKETS]{$socket} = [
+        $request_key,       # SK_KEY
+        $timer_id,          # SK_TIMER
+      ];
+    }
   }
-
-  if (!$nfound or $status != 0) {
-    DEBUG and warn "reclaiming socket";
-
-    # Watch the socket, and set a keep-alive timeout.
-    $kernel->select_read($socket, "ka_socket_activity");
-    my $timer_id = $kernel->delay_set(
-      ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
-    );
-
-    # Record the socket as free to be used.
-    $self->[SF_POOL]{$request_key}{$socket} = $socket;
-    $self->[SF_SOCKETS]{$socket} = [
-      $request_key,       # SK_KEY
-      $timer_id,          # SK_TIMER
-    ];
+  else {
+    DEBUG and warn "freed socket has previously been closed";
   }
 
   goto &_ka_wake_up;
