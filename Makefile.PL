@@ -18,14 +18,13 @@ WriteMakefile(
   PREREQ_PM    => {
     'POE'                         => 0.31,
     'POE::Component::Client::DNS' => 0.9801,
-    'POE::Component::SSLify'      => 0.04,
+    # 'POE::Component::SSLify'      => 0.04,  # optional now
   },
   dist         => {
     COMPRESS   => 'gzip -9f',
     SUFFIX     => 'gz',
     PREOP      => (
-      'svn-log.perl --repo https://thirdlobe.com/svn/poco-client-keepalive |' .
-      'tee ./$(DISTNAME)-$(VERSION)/CHANGES > ./CHANGES'
+      'svn-log.perl | tee ./$(DISTNAME)-$(VERSION)/CHANGES > ./CHANGES'
     ),
   },
 );

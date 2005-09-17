@@ -15,7 +15,12 @@ use POE;
 use POE::Wheel::SocketFactory;
 use POE::Component::Connection::Keepalive;
 use POE::Component::Client::DNS;
-use POE::Component::SSLify qw( Client_SSLify);
+
+my $ssl_available;
+eval {
+  require POE::Component::SSLify;
+  $ssl_available = 1;
+};
 
 use constant DEBUG => 0;
 
@@ -417,7 +422,10 @@ sub _ka_conn_success {
   my $used = delete $self->[SF_USED]{$wheel_id};
 
   if ($request->[RQ_SCHEME] eq 'https') {
-    $socket = Client_SSLify ($socket);
+    unless ($ssl_available) {
+      die "There is no SSL support, please install POE::Component::SSLify";
+    }
+    $socket = POE::Component::SSLify::Client_SSLify ($socket);
   }
 
   $used->[USED_SOCKET] = $socket;
