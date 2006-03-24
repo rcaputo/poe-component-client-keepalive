@@ -20,6 +20,11 @@ WriteMakefile(
     'POE::Component::Client::DNS' => 0.9801,
     # 'POE::Component::SSLify'      => 0.04,  # optional now
   },
+  EXTRA_META   => (
+    "no_index:\n" .
+    "    dir:\n" .
+    "        - mylib\n"
+  ),
   dist         => {
     COMPRESS   => 'gzip -9f',
     SUFFIX     => 'gz',
