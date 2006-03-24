@@ -115,7 +115,7 @@ sub new {
     $keep_alive,        # SF_KEEPALIVE
     $timeout,           # SF_TIMEOUT
     undef,              # SF_RESOLVER
-		undef,              # SF_SHUTDOWN
+    undef,              # SF_SHUTDOWN
   ], $class;
 
   unless (defined $resolver) {
@@ -346,10 +346,10 @@ sub allocate {
     1,          # RQ_ACTIVE
   ];
 
-	$poe_kernel->refcount_increment(
-		$request->[RQ_SESSION]->ID(),
-		"poco-client-keepalive"
-	);
+  $poe_kernel->refcount_increment(
+    $request->[RQ_SESSION]->ID(),
+    "poco-client-keepalive"
+  );
   $poe_kernel->call("$self", ka_set_timeout     => $request);
   $poe_kernel->post("$self", ka_resolve_request => $request);
 
@@ -381,12 +381,12 @@ sub _ka_request_timeout {
   # itself.
 
   if (defined $request->[RQ_WHEEL_ID]) {
-    @_[ARG0..ARG3] = ("connect", $!+0, "$@", $request->[RQ_WHEEL_ID]);
+    @_[ARG0..ARG3] = ("connect", $!+0, "$!", $request->[RQ_WHEEL_ID]);
     goto &_ka_conn_failure;
   }
 
   # But what if there is no wheel?
-  _respond_with_error($request, "connect", $! + 0, "$!"),
+  _respond_with_error($request, "connect", $!+0, "$!"),
 }
 
 # Connection failed.  Remove the SF_WHEELS record corresponding to the
@@ -458,7 +458,7 @@ sub _ka_conn_success {
 sub free {
   my ($self, $socket) = @_;
 
-	return if $self->[SF_SHUTDOWN];
+  return if $self->[SF_SHUTDOWN];
   DEBUG and warn "freeing socket";
 
   # Remove the accompanying SF_USED record.
@@ -615,7 +615,7 @@ sub _ka_shutdown {
     }
   }
 
-	$self->[SF_SHUTDOWN] = 1;
+  $self->[SF_SHUTDOWN] = 1;
   delete $self->[SF_RESOLVER];
   delete $_[HEAP]->{resolve};
   $kernel->alias_remove("$self");
@@ -813,11 +813,11 @@ sub _respond {
     }
   );
 
-	# Drop the extra refcount.
-	$poe_kernel->refcount_decrement(
-		$request->[RQ_SESSION]->ID(),
-		"poco-client-keepalive"
-	);
+  # Drop the extra refcount.
+  $poe_kernel->refcount_decrement(
+    $request->[RQ_SESSION]->ID(),
+    "poco-client-keepalive"
+  );
 
   # Remove associated timer.
   if ($request->[RQ_TIMER_ID]) {
