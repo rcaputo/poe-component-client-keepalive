@@ -39,7 +39,8 @@ sub SF_MAX_HOST  () {  6 }   #   $max_per_host,
 sub SF_SOCKETS   () {  7 }   #   \%socket_xref,
 sub SF_KEEPALIVE () {  8 }   #   $keep_alive_secs,
 sub SF_TIMEOUT   () {  9 }   #   $default_request_timeout,
-sub SF_RESOLVER  () { 10 }   #
+sub SF_RESOLVER  () { 10 }   #   $poco_client_dns_object,
+sub SF_SHUTDOWN  () { 11 }   #   $shutdown_flag,
                              # );
 
                             # $socket_xref{$socket} = [
@@ -114,6 +115,7 @@ sub new {
     $keep_alive,        # SF_KEEPALIVE
     $timeout,           # SF_TIMEOUT
     undef,              # SF_RESOLVER
+		undef,              # SF_SHUTDOWN
   ], $class;
 
   unless (defined $resolver) {
@@ -344,6 +346,10 @@ sub allocate {
     1,          # RQ_ACTIVE
   ];
 
+	$poe_kernel->refcount_increment(
+		$request->[RQ_SESSION]->ID(),
+		"poco-client-keepalive"
+	);
   $poe_kernel->call("$self", ka_set_timeout     => $request);
   $poe_kernel->post("$self", ka_resolve_request => $request);
 
@@ -452,6 +458,7 @@ sub _ka_conn_success {
 sub free {
   my ($self, $socket) = @_;
 
+	return if $self->[SF_SHUTDOWN];
   DEBUG and warn "freeing socket";
 
   # Remove the accompanying SF_USED record.
@@ -608,6 +615,7 @@ sub _ka_shutdown {
     }
   }
 
+	$self->[SF_SHUTDOWN] = 1;
   delete $self->[SF_RESOLVER];
   delete $_[HEAP]->{resolve};
   $kernel->alias_remove("$self");
@@ -804,6 +812,12 @@ sub _respond {
       %$fields,
     }
   );
+
+	# Drop the extra refcount.
+	$poe_kernel->refcount_decrement(
+		$request->[RQ_SESSION]->ID(),
+		"poco-client-keepalive"
+	);
 
   # Remove associated timer.
   if ($request->[RQ_TIMER_ID]) {

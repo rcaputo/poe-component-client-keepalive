@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # $Id$
+# vim: filetype=perl
 
 # Test request timeouts.  Set the timeout ridiculously small, so
 # timeouts happen immediately.  Request a connection, and watch it
