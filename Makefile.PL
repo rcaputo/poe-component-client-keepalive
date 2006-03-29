@@ -1,13 +1,16 @@
 #!/usr/bin/perl
 # $Id$
 
+use strict;
+
 use ExtUtils::MakeMaker;
 
 # Touch CHANGES so it exists.
 open(CHANGES, ">>CHANGES") and close CHANGES;
 
 my @conditional_makefile;
-if ($ExtUtils::MakeMaker::VERSION > 6.30) {
+my $eu_mm_ver = $ExtUtils::MakeMaker::VERSION;
+if ( $eu_mm_ver > 6.30 or $eu_mm_ver =~ /^6\.30_/ ) {
   push(
     @conditional_makefile,
     EXTRA_META  => (
