@@ -142,8 +142,11 @@ sub got_fourth_conn {
   ok($stuff->{error_num} == ECONNREFUSED, "connection error ECONNREFUSED");
 
   my $lc_str = lc $stuff->{error_str};
+	my @wanted = ( "connection refused" );
+	push @wanted, "unknown error" if $^O eq "MSWin32";
+
   ok(
-    $lc_str =~ /connection\s+refused/i,
+		(grep { $lc_str eq $_ } @wanted),
     "error string: wanted(connection refused) got($lc_str)"
   );
 
