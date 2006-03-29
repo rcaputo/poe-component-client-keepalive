@@ -6,6 +6,18 @@ use ExtUtils::MakeMaker;
 # Touch CHANGES so it exists.
 open(CHANGES, ">>CHANGES") and close CHANGES;
 
+my @conditional_makefile;
+if ($ExtUtils::MakeMaker::VERSION > 6.30) {
+  push(
+    @conditional_makefile,
+    EXTRA_META  => (
+      "no_index:\n" .
+      "    dir:\n" .
+      "        - mylib\n"
+    )
+  );
+}
+
 WriteMakefile(
   NAME         => 'POE::Component::Client::Keepalive',
   AUTHOR       => 'Rocco Caputo <rcaputo@cpan.org>',
@@ -18,13 +30,7 @@ WriteMakefile(
   PREREQ_PM    => {
     'POE'                         => 0.31,
     'POE::Component::Client::DNS' => 0.9801,
-    # 'POE::Component::SSLify'      => 0.04,  # optional now
   },
-  EXTRA_META   => (
-    "no_index:\n" .
-    "    dir:\n" .
-    "    - mylib\n"
-  ),
   dist         => {
     COMPRESS   => 'gzip -9f',
     SUFFIX     => 'gz',
@@ -32,4 +38,5 @@ WriteMakefile(
       'svn-log.perl | tee ./$(DISTNAME)-$(VERSION)/CHANGES > ./CHANGES'
     ),
   },
+  @conditional_makefile,
 );
