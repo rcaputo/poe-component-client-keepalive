@@ -19,6 +19,7 @@ t/09_timeout.t
 t/10_resolver.t
 t/11_dead_socket.t
 t/12_extref.t
+t/13_close.t
 t/50_bisbee_timeout.t
 t/51_reiss_reuse.t
 META.yml                                 Module meta-data (added by MakeMaker)

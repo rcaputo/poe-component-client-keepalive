@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.0703";
+$VERSION = "0.0704";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
@@ -551,6 +551,10 @@ sub _ka_reclaim_socket {
     my ($rout, $eout);
     $nfound = select ($rout=$rin, undef, $eout=$rin, 0);
     DEBUG and warn "select results: $nfound";
+
+    if ($nfound == -1) {
+      die "select failed: $!";
+    }
 
     if ($nfound) {
       use bytes;

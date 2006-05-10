@@ -15,6 +15,8 @@ $VERSION = do {my($r)=(q$Revision$=~/(\d+)/);sprintf"1.%04d",$r};
 use Carp qw(croak);
 use POE::Wheel::ReadWrite;
 
+use constant DEBUG => 0;
+
 sub CK_SOCKET  () { 0 }  # The socket we're hiding.
 sub CK_MANAGER () { 1 }  # The connection manager that owns the socket.
 sub CK_WHEEL   () { 2 }  # The wheel we're hiding.
@@ -60,6 +62,37 @@ sub start {
 sub wheel {
   my $self = shift;
   return $self->[CK_WHEEL];
+}
+
+
+# For getting rid of the connection prematurely
+
+sub close {
+  my $self = shift;
+
+  DEBUG and warn "closing $self";
+  if (defined $self->wheel) {
+    $self->wheel->shutdown_input();
+    $self->wheel->shutdown_output();
+    $self->[CK_WHEEL] = undef;
+  }
+  
+  DEBUG and warn "about to close potentially tied socket/ tied = ", tied(*{$self->[CK_SOCKET]}) ;
+  close $self->[CK_SOCKET];
+
+  my $is_tied = defined tied(*{$self->[CK_SOCKET]});
+  # this is necessary so defined fileno() does the right thing
+  # on SSLified sockets
+  if ($is_tied) {
+    DEBUG and warn "about to untie";
+    untie(*{$self->[CK_SOCKET]});
+  }
+
+  if (DEBUG) {
+    if (defined(fileno($self->[CK_SOCKET]))) {
+      warn "*** BUG: fileno still defined! Is " . fileno($self->[CK_SOCKET]);
+    }
+  }
 }
 
 1;
@@ -145,6 +178,11 @@ Returns a reference to the internal POE::Wheel::ReadWrite object, so
 that methods may be called upon it.
 
   $heap->{connection}->wheel()->pause_input();
+
+=item close
+
+Closes the connection immediately. Calls shutdown_input() and shutdown_output()
+on the wheel also. 
 
 =back
 
