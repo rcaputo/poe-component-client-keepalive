@@ -52,7 +52,7 @@ sub SK_TIMER     () { 1 }   #   $idle_timer,
 
                             # $wheels_by_id{$wheel_id} = [
 sub WHEEL_WHEEL   () { 0 }  #   $wheel_object,
-sub WHEEL_REQUEST () { 1 }  #   $request_record,
+sub WHEEL_REQUEST () { 1 }  #   $request,
                             # ];
 
                             # $socket_pool{$conn_key}{$socket} = $socket;
@@ -154,7 +154,8 @@ sub new {
 # Set an alias so the public methods can send it messages easily.
 
 sub _ka_initialize {
-  my ($object, $kernel) = @_[OBJECT, KERNEL];
+  my ($object, $kernel, $heap) = @_[OBJECT, KERNEL, HEAP];
+  $heap->{resolve} = { };
   $kernel->alias_set("$object");
 }
 
@@ -182,7 +183,7 @@ sub _ka_wake_up {
 
   QUEUED:
   foreach my $request (@{$self->[SF_QUEUE]}) {
-    DEBUG and warn "checking for $request->[RQ_CONN_KEY]";
+    DEBUG and warn "WAKEUP: checking for $request->[RQ_CONN_KEY]";
 
     # Sweep away inactive requests.
 
@@ -215,11 +216,11 @@ sub _ka_wake_up {
 
       next;
     }
-    
+
     # we can't easily take this out of the outer loop since _check_free_pool
     # can change it from under us
     my @free_sockets   = keys(%{$self->[SF_SOCKETS]});
- 
+
     # Try to free over-committed (but unused) sockets until we're back
     # under SF_MAX_OPEN sockets.  Bail out if we can't free enough.
     # TODO - Consider removing @free_sockets in least- to
@@ -233,7 +234,7 @@ sub _ka_wake_up {
 
     # Start the request.  Create a wheel to begin the connection.
     # Move the wheel and its request into SF_WHEELS.
-    DEBUG and warn "creating wheel for $req_key";
+    DEBUG and warn "WAKEUP: creating wheel for $req_key";
 
     my $addr = ($request->[RQ_IP] or $request->[RQ_ADDRESS]);
     my $wheel = POE::Wheel::SocketFactory->new(
@@ -304,6 +305,8 @@ sub allocate {
   my $timeout = delete $args{timeout};
   $timeout    = $self->[SF_TIMEOUT]    unless $timeout;
 
+  croak "allocate() on shut-down connection manager" if $self->[SF_SHUTDOWN];
+
   my @unknown = sort keys %args;
   if (@unknown) {
     croak "allocate() doesn't accept: @unknown";
@@ -331,7 +334,7 @@ sub allocate {
   }
 
   # We can't honor the request immediately, so it's put into a queue.
-  DEBUG and warn "enqueuing request for $conn_key";
+  DEBUG and warn "ALLOCATE: enqueuing request for $conn_key";
 
   my $request = [
     $poe_kernel->get_active_session(),  # RQ_SESSION
@@ -353,8 +356,9 @@ sub allocate {
     $request->[RQ_SESSION]->ID(),
     "poco-client-keepalive"
   );
+
   $poe_kernel->call("$self", ka_set_timeout     => $request);
-  $poe_kernel->post("$self", ka_resolve_request => $request);
+  $poe_kernel->call("$self", ka_resolve_request => $request);
 
   return;
 }
@@ -375,7 +379,7 @@ sub _ka_request_timeout {
   my ($self, $kernel, $request) = @_[OBJECT, KERNEL, ARG0];
 
   DEBUG and warn(
-    "CON: request from session", $request->[RQ_SESSION]->ID,
+    "CON: request from session ", $request->[RQ_SESSION]->ID,
     " for address ", $request->[RQ_ADDRESS], " timed out"
   );
   $! = ETIMEDOUT;
@@ -440,7 +444,9 @@ sub _ka_conn_success {
   $used->[USED_SOCKET] = $socket;
 
   $self->[SF_USED]{$socket} = $used;
-  DEBUG and warn "posting... to $request->[RQ_SESSION] . $request->[RQ_EVENT]";
+  DEBUG and warn(
+    "CON: posting... to $request->[RQ_SESSION] . $request->[RQ_EVENT]"
+  );
 
   # Build a connection object around the socket.
   my $connection = POE::Component::Connection::Keepalive->new(
@@ -462,7 +468,7 @@ sub free {
   my ($self, $socket) = @_;
 
   return if $self->[SF_SHUTDOWN];
-  DEBUG and warn "freeing socket";
+  DEBUG and warn "FREE: freeing socket";
 
   # Remove the accompanying SF_USED record.
   croak "can't free() undefined socket" unless defined $socket;
@@ -492,7 +498,7 @@ sub _check_free_pool {
 
   my $free = $self->[SF_POOL]{$conn_key};
 
-  DEBUG and warn "reusing $conn_key";
+  DEBUG and warn "CHECK: reusing $conn_key";
 
   my $next_socket = (values %$free)[0];
   delete $free->{$next_socket};
@@ -545,12 +551,12 @@ sub _ka_reclaim_socket {
   # only try to reuse it if it still works
   my ($nfound, $status);
   if (defined fileno($socket)) {
-    DEBUG and warn "checking if socket still works";
+    DEBUG and warn "RECLAIM: checking if socket still works";
     my $rin = '';
     vec($rin, fileno($socket), 1) = 1;
     my ($rout, $eout);
     $nfound = select ($rout=$rin, undef, $eout=$rin, 0);
-    DEBUG and warn "select results: $nfound";
+    DEBUG and warn "RECLAIM: select results: $nfound";
 
     if ($nfound == -1) {
       die "select failed: $!";
@@ -558,15 +564,15 @@ sub _ka_reclaim_socket {
 
     if ($nfound) {
       use bytes;
-      DEBUG and warn "uh oh, socket activity";
+      DEBUG and warn "RECLAIM: uh oh, socket activity";
       $status = sysread($socket, my $buf = "", 65536);
       if (DEBUG and defined $status) {
-        warn "read $status bytes. 0 means EOF";
+        warn "RECLAIM: read $status bytes. 0 means EOF";
       }
     }
 
     if (!$nfound or $status != 0) {
-      DEBUG and warn "reclaiming socket";
+      DEBUG and warn "RECLAIM: reclaiming socket";
 
       # Watch the socket, and set a keep-alive timeout.
       $kernel->select_read($socket, "ka_socket_activity");
@@ -583,7 +589,7 @@ sub _ka_reclaim_socket {
     }
   }
   else {
-    DEBUG and warn "freed socket has previously been closed";
+    DEBUG and warn "RECLAIM: freed socket has previously been closed";
   }
 
   goto &_ka_wake_up;
@@ -613,21 +619,63 @@ sub shutdown {
 }
 
 sub _ka_shutdown {
-  my ($self, $kernel) = @_[OBJECT, KERNEL];
+  my ($self, $kernel, $heap) = @_[OBJECT, KERNEL, HEAP];
 
+  return if $self->[SF_SHUTDOWN];
+
+  # Clean out the request queue.
+  foreach my $request (@{$self->[SF_QUEUE]}) {
+    $self->_shutdown_request($kernel, $request);
+  }
+  $self->[SF_QUEUE] = [ ];
+
+  # Clean out the socket pool.
   foreach my $sockets (values %{$self->[SF_POOL]}) {
     foreach my $socket (values %$sockets) {
-      $kernel->alarm_remove($_[OBJECT]->[SF_SOCKETS]{$socket}[SK_TIMER]);
+      $kernel->alarm_remove($self->[SF_SOCKETS]{$socket}[SK_TIMER]);
       $kernel->select_read($socket, undef);
     }
   }
 
-  $self->[SF_SHUTDOWN] = 1;
+  # Stop any pending resolver requests.
+  foreach my $host (keys %{$heap->{resolve}}) {
+    DEBUG and warn "SHT: Shutting down resolver requests for $host";
+    foreach my $request (@{$heap->{resolve}{$host}}) {
+      $self->_shutdown_request($kernel, $request);
+    }
+  }
+  $heap->{resolve} = { };
+
+  # Shut down the resolver.
+  DEBUG and warn "SHT: Shutting down resolver";
+  $self->[SF_RESOLVER]->shutdown();
   delete $self->[SF_RESOLVER];
-  delete $_[HEAP]->{resolve};
+
+  # Finish keepalive's shutdown.
   $kernel->alias_remove("$self");
+  $self->[SF_SHUTDOWN] = 1;
 
   return;
+}
+
+sub _shutdown_request {
+  my ($self, $kernel, $request) = @_;
+
+  if (defined $request->[RQ_TIMER_ID]) {
+    DEBUG and warn "SHT: Shutting down resolver timer $request->[RQ_TIMER_ID]";
+    $kernel->alarm_remove($request->[RQ_TIMER_ID]);
+  }
+
+  if (defined $request->[RQ_WHEEL_ID]) {
+    DEBUG and warn "SHT: Shutting down resolver wheel $request->[RQ_TIMER_ID]";
+    delete $self->[SF_WHEELS]{$request->[RQ_WHEEL_ID]};
+  }
+
+  if (defined $request->[RQ_SESSION]) {
+    my $session_id = $request->[RQ_SESSION]->ID;
+    DEBUG and warn "SHT: Releasing session $session_id";
+    $kernel->refcount_decrement($session_id, "poco-client-keepalive");
+  }
 }
 
 # A socket in the free pool has activity.  Read from it and discard
@@ -675,12 +723,15 @@ sub _ka_resolve_request {
     }
   } else {
     DEBUG and warn "DNS: $host may block while it's looked up.\n";
-    $kernel->yield(ka_add_to_queue => $request);
+    $kernel->call("$self", ka_add_to_queue => $request);
   }
 }
 
 sub _ka_dns_response {
-  my ($kernel, $heap, $response) = @_[KERNEL, HEAP, ARG0];
+  my ($self, $kernel, $heap, $response) = @_[OBJECT, KERNEL, HEAP, ARG0];
+
+  # Nothing to do if we're shut down.
+
   my $request_address = $response->{'host'};
   my $response_object = $response->{'response'};
   my $response_error  = $response->{'error'};
@@ -713,8 +764,7 @@ sub _ka_dns_response {
     # don't need this because we ask for only A answers anyway
     #next unless $answer->type eq "A";
 
-    DEBUG and
-      warn "DNS: $request_address resolves to ", $answer->rdatastr;
+    DEBUG and warn "DNS: $request_address resolves to ", $answer->rdatastr;
 
     foreach my $request (@$requests) {
       # Don't bother continuing inactive requests.
