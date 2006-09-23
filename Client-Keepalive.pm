@@ -161,6 +161,7 @@ sub new {
         ka_resolve_request   => "_ka_resolve_request",
         ka_add_to_queue      => "_ka_add_to_queue",
         ka_dns_response      => "_ka_dns_response",
+        ka_cancel_dns_response => "_ka_cancel_dns_response",
       },
     ],
   );
