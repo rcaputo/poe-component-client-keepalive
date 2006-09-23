@@ -24,6 +24,23 @@ eval {
 
 use constant DEBUG => 0;
 
+# Manage connection request IDs.
+
+my $current_id = 0;
+my %active_req_ids;
+
+sub _allocate_req_id {
+  while (1) {
+    last unless exists $active_req_ids{++$current_id};
+  }
+  return $active_req_ids{$current_id} = $current_id;
+}
+
+sub _free_req_id {
+  my $id = shift;
+  delete $active_req_ids{$id};
+}
+
 # The connection manager uses a number of data structures, most of
 # them arrays.  These constants define offsets into those arrays, and
 # the comments document them.
@@ -83,6 +100,7 @@ sub RQ_START    () {  9 }   #   $request_start_time,
 sub RQ_TIMER_ID () { 10 }   #   $request_timer_id,
 sub RQ_WHEEL_ID () { 11 }   #   $request_wheel_id,
 sub RQ_ACTIVE   () { 12 }   #   $request_is_active,
+sub RQ_ID       () { 13 }   #   $request_id,
                             # ];
 
 # Create a connection manager.
@@ -350,6 +368,7 @@ sub allocate {
     undef,      # RQ_TIMER_ID
     undef,      # RQ_WHEEL_ID
     1,          # RQ_ACTIVE
+    _allocate_req_id(), # RQ_ID
   ];
 
   $poe_kernel->refcount_increment(
@@ -360,7 +379,81 @@ sub allocate {
   $poe_kernel->call("$self", ka_set_timeout     => $request);
   $poe_kernel->call("$self", ka_resolve_request => $request);
 
-  return;
+  return $request->[RQ_ID];
+}
+
+sub deallocate {
+  my ($self, $req_id) = @_;
+
+  croak "deallocate() requires a request ID" unless(
+    defined($req_id) and exists($active_req_ids{$req_id})
+  );
+
+  # Find the request in the queue, and remove it.
+
+  my $req_index = @{$self->[SF_QUEUE]};
+  my $request;
+  while ($req_index--) {
+    next if $self->[SF_QUEUE][RQ_ID] != $req_id;
+    $request = $self->[SF_QUEUE][$req_index];
+    splice(@{$self->[SF_QUEUE]}, $req_index, 1);
+    last;
+  }
+
+  # Unless we can't... then we don't have anything to deallocate.
+
+  unless (defined $request) {
+    DEBUG and warn "deallocate could not find request $req_id";
+    return;
+  }
+
+  my $conn_key = $request->[RQ_CONN_KEY];
+  my $existing_connection = $self->_check_free_pool($conn_key);
+
+  if (defined $existing_connection) {
+    # remove it from the pool, delete the socket
+    $self->_remove_socket_from_pool($existing_connection->{socket});
+    DEBUG and warn( "deallocate called, deleted already-connected socket" );
+    return;
+  }
+  else {
+    DEBUG and warn(
+      "deallocate called without an existing connection.  ",
+      "cancelling connection request"
+    );
+    $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
+    return;
+  }
+}
+
+sub _ka_cancel_dns_response {
+  my ($self, $kernel, $heap, $request) = @_[OBJECT, KERNEL, HEAP, ARG0];
+
+  my $address = $request->[RQ_ADDRESS];
+  my $requests = $heap->{resolve}{$address};
+
+  # Remove the resolver request for the address of this connection
+  # request
+
+  my $req_index = @$requests;
+  while ($req_index--) {
+    next unless $requests->[$req_index] == $request;
+    splice(@$requests, $req_index, 1);
+    last;
+  }
+
+  # Clean up the structure for the address if there are no more
+  # requests to resolve that address.
+
+  unless (@$requests) {
+    delete $heap->{resolve}{$address};
+  }
+
+  # cancel our attempt to connect
+  $poe_kernel->alarm_remove( $request->[RQ_TIMER_ID] );
+  $poe_kernel->refcount_decrement(
+    $request->[RQ_SESSION]->ID(), "poco-client-keepalive"
+  );
 }
 
 # Set the request's timeout, in the component's context.
