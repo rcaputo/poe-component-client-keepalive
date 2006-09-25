@@ -58,6 +58,7 @@ sub SF_KEEPALIVE () {  8 }   #   $keep_alive_secs,
 sub SF_TIMEOUT   () {  9 }   #   $default_request_timeout,
 sub SF_RESOLVER  () { 10 }   #   $poco_client_dns_object,
 sub SF_SHUTDOWN  () { 11 }   #   $shutdown_flag,
+sub SF_REQ_INDEX () { 12 }   #   \%request_id_to_wheel_id,
                              # );
 
                             # $socket_xref{$socket} = [
@@ -268,6 +269,7 @@ sub _ka_wake_up {
       $request,   # WHEEL_REQUEST
     ];
 
+    # store the wheel's ID in the request object
     $request->[RQ_WHEEL_ID] = $wheel->ID;
 
     # Count it as used, so we don't over commit file handles.
@@ -371,6 +373,8 @@ sub allocate {
     1,          # RQ_ACTIVE
     _allocate_req_id(), # RQ_ID
   ];
+  
+  $self->[SF_REQ_INDEX]{$request->[RQ_ID]} = $request;
 
   $poe_kernel->refcount_increment(
     $request->[RQ_SESSION]->ID(),
@@ -390,19 +394,7 @@ sub deallocate {
     defined($req_id) and exists($active_req_ids{$req_id})
   );
 
-  # Find the request in the queue, and remove it.
-
-  my $req_index = @{$self->[SF_QUEUE]};
-  my $request;
-  while ($req_index--) {
-    next if $self->[SF_QUEUE][RQ_ID] != $req_id;
-    $request = $self->[SF_QUEUE][$req_index];
-    splice(@{$self->[SF_QUEUE]}, $req_index, 1);
-    last;
-  }
-
-  # Unless we can't... then we don't have anything to deallocate.
-
+  my $request = $self->[SF_REQ_INDEX]{$req_id};
   unless (defined $request) {
     DEBUG and warn "deallocate could not find request $req_id";
     return;
@@ -422,6 +414,10 @@ sub deallocate {
       "deallocate called without an existing connection.  ",
       "cancelling connection request"
     );
+
+    my $heap = $poe_kernel->get_active_session->get_heap;
+    $heap->{resolve}->{$request->[RQ_ADDRESS]} = "cancelled";
+
     $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
     return;
   }
@@ -438,6 +434,7 @@ sub _ka_cancel_dns_response {
 
   my $req_index = @$requests;
   while ($req_index--) {
+    next if $requests->[$req_index] eq "cancelled";
     next unless $requests->[$req_index] == $request;
     splice(@$requests, $req_index, 1);
     last;
@@ -447,7 +444,7 @@ sub _ka_cancel_dns_response {
   # requests to resolve that address.
 
   unless (@$requests) {
-    delete $heap->{resolve}{$address};
+    $heap->{resolve}{$address} = ["cancelled"];
   }
 
   # cancel our attempt to connect
@@ -505,6 +502,9 @@ sub _ka_conn_failure {
   # Remove the SF_USED placeholder.
   delete $self->[SF_USED]{$wheel_id};
 
+  # remove the wheel-to-request index
+  delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+
   # Discount the use by request key, removing the SF_USED record
   # entirely if it's now moot.
   my $request_key = $request->[RQ_CONN_KEY];
@@ -523,6 +523,9 @@ sub _ka_conn_success {
   # Remove the SF_WHEELS record.
   my $wheel_rec = delete $self->[SF_WHEELS]{$wheel_id};
   my $request   = $wheel_rec->[WHEEL_REQUEST];
+
+  # remove the wheel-to-request index
+  delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
 
   # Remove the SF_USED placeholder, add in the socket, and store it
   # properly.
@@ -735,6 +738,7 @@ sub _ka_shutdown {
   foreach my $host (keys %{$heap->{resolve}}) {
     DEBUG and warn "SHT: Shutting down resolver requests for $host";
     foreach my $request (@{$heap->{resolve}{$host}}) {
+      next if $request eq "cancelled";
       $self->_shutdown_request($kernel, $request);
     }
   }
@@ -763,6 +767,9 @@ sub _shutdown_request {
   if (defined $request->[RQ_WHEEL_ID]) {
     DEBUG and warn "SHT: Shutting down resolver wheel $request->[RQ_TIMER_ID]";
     delete $self->[SF_WHEELS]{$request->[RQ_WHEEL_ID]};
+    
+    # remove the wheel-to-request index
+    delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
   }
 
   if (defined $request->[RQ_SESSION]) {
@@ -842,7 +849,18 @@ sub _ka_dns_response {
   # being called multiple times, so we should be safe there, too.
   # Leave the die() in until coverage == 100%, so we can catch
   # possible bugs in the future.
-  die "!!!: Unexpectedly undefined requests" unless defined $requests;
+  #
+  # If it says "cancelled", it was.
+  return unless defined $requests;
+  if (defined $requests) {
+    if (ref $requests eq 'ARRAY') {
+        return if grep { $_ eq 'cancelled' } @$requests;
+    } else {
+      die "!!!: got a defined requests but NOT an arrayref";
+    }
+  } else {
+     die "!!!: Unexpectedly undefined requests";
+  }
 
   # No response.  This is an error.  Cancel all requests for the
   # address.  Tell everybody that their requests timed out.
@@ -903,7 +921,7 @@ sub _ka_add_to_queue {
   return if (
     ($self->[SF_USED_EACH]{$conn_key} || 0) >= $self->[SF_MAX_HOST]
   );
-
+  
   # Wake the session up, and return nothing, signifying sound and fury
   # yet to come.
   DEBUG and warn "posting wakeup for $conn_key";
