@@ -1255,14 +1255,19 @@ sending mail to bug-poe-component-client-keepalive@rt.cpan.org.
 
 =head1 LICENSE
 
-This distribution is copyright 2004 by Rocco Caputo.  All rights are
-reserved.  This distribution is free software; you may redistribute it
-and/or modify it under the same terms as Perl itself.
+This distribution is copyright 2004-2006 by Rocco Caputo.  All rights
+are reserved.  This distribution is free software; you may
+redistribute it and/or modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 
 Rocco Caputo <rcaputo@cpan.org>
 
-Special thanks to Rob Bloodgood.
+=head1 CONTRIBUTORS
+
+Rob Bloodgood helped out a lot.  Thank you.
+
+Joel Bernstein solved some nasty race conditions.  Portugal Telecom
+L<http://www.sapo.pt/> was kind enough to support his contributions.
 
 =cut
