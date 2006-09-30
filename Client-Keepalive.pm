@@ -59,6 +59,7 @@ sub SF_TIMEOUT   () {  9 }   #   $default_request_timeout,
 sub SF_RESOLVER  () { 10 }   #   $poco_client_dns_object,
 sub SF_SHUTDOWN  () { 11 }   #   $shutdown_flag,
 sub SF_REQ_INDEX () { 12 }   #   \%request_id_to_wheel_id,
+sub SF_BIND_ADDR () { 13 }   #   $bind_address,
                              # );
 
                             # $socket_xref{$socket} = [
@@ -116,6 +117,7 @@ sub new {
   my $keep_alive   = delete($args{keep_alive})   || 15;
   my $timeout      = delete($args{timeout})      || 120;
   my $resolver     = delete($args{resolver});
+  my $bind_address = delete($args{bind_address}) || "0.0.0.0";
 
   my @unknown = sort keys %args;
   if (@unknown) {
@@ -135,6 +137,8 @@ sub new {
     $timeout,           # SF_TIMEOUT
     undef,              # SF_RESOLVER
     undef,              # SF_SHUTDOWN
+    undef,              # SF_REQ_INDEX
+    $bind_address,      # SF_BIND_ADDR
   ], $class;
 
   unless (defined $resolver) {
@@ -258,6 +262,7 @@ sub _ka_wake_up {
 
     my $addr = ($request->[RQ_IP] or $request->[RQ_ADDRESS]);
     my $wheel = POE::Wheel::SocketFactory->new(
+      BindAddress   => $self->[SF_BIND_ADDR],
       RemoteAddress => $addr,
       RemotePort    => $request->[RQ_PORT],
       SuccessEvent  => "ka_conn_success",
@@ -373,7 +378,7 @@ sub allocate {
     1,          # RQ_ACTIVE
     _allocate_req_id(), # RQ_ID
   ];
-  
+
   $self->[SF_REQ_INDEX]{$request->[RQ_ID]} = $request;
 
   $poe_kernel->refcount_increment(
@@ -1098,7 +1103,7 @@ others.  None will know about the limits set in the others, so it's
 possible to overrun your file descriptors for a process if you're not
 careful.
 
-new() takes up to four parameters.  All of them are optional.
+new() takes up to five parameters.  All of them are optional.
 
 To limit the number of simultaneous connections to a particular host
 (defined by a combination of scheme, address and port):
@@ -1122,6 +1127,11 @@ established.  They can set the request timeout to alter how long the
 component holds a request before generating an error.
 
   timeout      => $seconds_to_process_a_request, # defaults to 120
+
+Specify a bind_address to bind all client sockets to a particular
+local address.  The value of bind_address will be passed directly to
+POE::Wheel::SocketFactory.  See that module's documentation for
+implementation details.
 
 =item allocate
 
