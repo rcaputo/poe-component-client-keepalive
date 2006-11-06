@@ -25,6 +25,7 @@ WriteMakefile(
   NAME         => 'POE::Component::Client::Keepalive',
   AUTHOR       => 'Rocco Caputo <rcaputo@cpan.org>',
   ABSTRACT     => 'Manages and keeps alive client connections',
+  LICENSE      => 'perl',
   VERSION_FROM => 'Client-Keepalive.pm',
   PM           => {
     'Client-Keepalive.pm' => '$(INST_LIBDIR)/Keepalive.pm',
