@@ -152,7 +152,7 @@ sub new {
     object_states => [
       $self => {
         _start               => "_ka_initialize",
-        _stop                => "_ka_ignore_this_event",
+        _stop                => "_ka_stopped",
         ka_conn_failure      => "_ka_conn_failure",
         ka_conn_success      => "_ka_conn_success",
         ka_reclaim_socket    => "_ka_reclaim_socket",
@@ -183,6 +183,17 @@ sub _ka_initialize {
   $kernel->alias_set("$object");
 }
 
+# When programs crash, the session may stop in a non-shutdown state.
+# _ka_stopped and DESTROY catch this either way the death occurs.
+
+sub _ka_stopped {
+	$_[OBJECT][SF_SHUTDOWN] = 1;
+}
+
+sub DESTROY {
+  my $self = shift;
+  $self->shutdown();
+}
 
 # Request to wake up.  This should only happen during the edge
 # condition where the component's request queue goes from empty to
@@ -717,6 +728,7 @@ sub _ka_relinquish_socket {
 
 sub shutdown {
   my $self = shift;
+  return if $self->[SF_SHUTDOWN];
   $poe_kernel->call("$self", "ka_shutdown");
 }
 
@@ -772,7 +784,7 @@ sub _shutdown_request {
   if (defined $request->[RQ_WHEEL_ID]) {
     DEBUG and warn "SHT: Shutting down resolver wheel $request->[RQ_TIMER_ID]";
     delete $self->[SF_WHEELS]{$request->[RQ_WHEEL_ID]};
-    
+
     # remove the wheel-to-request index
     delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
   }
@@ -926,7 +938,7 @@ sub _ka_add_to_queue {
   return if (
     ($self->[SF_USED_EACH]{$conn_key} || 0) >= $self->[SF_MAX_HOST]
   );
-  
+
   # Wake the session up, and return nothing, signifying sound and fury
   # yet to come.
   DEBUG and warn "posting wakeup for $conn_key";
