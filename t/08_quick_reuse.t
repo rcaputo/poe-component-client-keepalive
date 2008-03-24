@@ -19,10 +19,13 @@ use POE::Component::Client::Keepalive;
 
 use TestServer;
 
-use constant PORT => 49018;
+# TODO - Ideally TestServer->spawn() should choose an unused port and
+# return that.
+
+use constant PORT => 48000 + int(rand 1000);
 TestServer->spawn(PORT);
 
-use constant ANOTHER_PORT => 49019;
+use constant ANOTHER_PORT => PORT + 1;
 TestServer->spawn(ANOTHER_PORT);
 
 POE::Session->create(
