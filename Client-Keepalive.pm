@@ -23,6 +23,8 @@ eval {
 };
 
 use constant DEBUG => 0;
+use constant DEBUG_DNS => DEBUG || 0;
+use constant DEBUG_DEALLOCATE => DEBUG || 0;
 
 # Manage connection request IDs.
 
@@ -187,7 +189,7 @@ sub _ka_initialize {
 # _ka_stopped and DESTROY catch this either way the death occurs.
 
 sub _ka_stopped {
-	$_[OBJECT][SF_SHUTDOWN] = 1;
+  $_[OBJECT][SF_SHUTDOWN] = 1;
 }
 
 sub DESTROY {
@@ -412,7 +414,7 @@ sub deallocate {
 
   my $request = $self->[SF_REQ_INDEX]{$req_id};
   unless (defined $request) {
-    DEBUG and warn "deallocate could not find request $req_id";
+    DEBUG_DEALLOCATE and warn "deallocate could not find request $req_id";
     return;
   }
 
@@ -422,17 +424,32 @@ sub deallocate {
   if (defined $existing_connection) {
     # remove it from the pool, delete the socket
     $self->_remove_socket_from_pool($existing_connection->{socket});
-    DEBUG and warn( "deallocate called, deleted already-connected socket" );
+    DEBUG_DEALLOCATE and warn(
+      "deallocate called, deleted already-connected socket"
+    );
     return;
   }
   else {
-    DEBUG and warn(
+    DEBUG_DEALLOCATE and warn(
       "deallocate called without an existing connection.  ",
       "cancelling connection request"
     );
 
     my $heap = $poe_kernel->get_active_session->get_heap;
-    $heap->{resolve}->{$request->[RQ_ADDRESS]} = "cancelled";
+
+    unless (exists $heap->{resolve}->{$request->[RQ_ADDRESS]}) {
+      DEBUG_DEALLOCATE and warn(
+        "deallocate cannot cancel dns -- no pending request"
+      );
+      return;
+    }
+
+    if ($heap->{resolve}->{$request->[RQ_ADDRESS]} eq 'cancelled') {
+      DEBUG_DEALLOCATE and warn(
+        "deallocate cannot cancel dns -- request already cancelled"
+      );
+      return;
+    }
 
     $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
     return;
@@ -443,6 +460,7 @@ sub _ka_cancel_dns_response {
   my ($self, $kernel, $heap, $request) = @_[OBJECT, KERNEL, HEAP, ARG0];
 
   my $address = $request->[RQ_ADDRESS];
+  DEBUG_DNS and warn "DNS: canceling request for $address\n";
   my $requests = $heap->{resolve}{$address};
 
   # Remove the resolver request for the address of this connection
@@ -450,7 +468,6 @@ sub _ka_cancel_dns_response {
 
   my $req_index = @$requests;
   while ($req_index--) {
-    next if $requests->[$req_index] eq "cancelled";
     next unless $requests->[$req_index] == $request;
     splice(@$requests, $req_index, 1);
     last;
@@ -460,7 +477,8 @@ sub _ka_cancel_dns_response {
   # requests to resolve that address.
 
   unless (@$requests) {
-    $heap->{resolve}{$address} = ["cancelled"];
+    DEBUG_DNS and warn "DNS: canceled all requests for $address";
+    $heap->{resolve}{$address} = 'cancelled';
   }
 
   # cancel our attempt to connect
@@ -755,7 +773,6 @@ sub _ka_shutdown {
   foreach my $host (keys %{$heap->{resolve}}) {
     DEBUG and warn "SHT: Shutting down resolver requests for $host";
     foreach my $request (@{$heap->{resolve}{$host}}) {
-      next if $request eq "cancelled";
       $self->_shutdown_request($kernel, $request);
     }
   }
@@ -819,36 +836,42 @@ sub _ka_resolve_request {
   my ($self, $kernel, $heap, $request) = @_[OBJECT, KERNEL, HEAP, ARG0];
 
   my $host = $request->[RQ_ADDRESS];
+
+  # Skip DNS resolution if it's already a dotted quad.
+  # TODO - Not all dotted quads are good.
   if ($host !~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
-
-    if (exists $heap->{resolve}->{$host}) {
-      DEBUG and warn "DNS: $host is piggybacking on a pending lookup.\n";
-      push @{$heap->{resolve}->{$host}}, $request;
-    } else {
-      DEBUG and warn "DNS: $host is being looked up in the background.\n";
-      $heap->{resolve}->{$host} = [ $request ];
-
-      my $response = $self->[SF_RESOLVER]->resolve(
-        event   => 'ka_dns_response',
-        host    => $host,
-        context => 1,
-      );
-
-      if ($response) {
-        DEBUG and warn "DNS: resolver returned immediately";
-        $kernel->yield (ka_dns_response => $response);
-      }
-    }
-  } else {
-    DEBUG and warn "DNS: $host may block while it's looked up.\n";
+    DEBUG_DNS and warn "DNS: $host is a dotted quad; skipping lookup";
     $kernel->call("$self", ka_add_to_queue => $request);
+    return;
   }
+
+  # It's already pending DNS resolution.  Combine this with previous.
+  if (exists $heap->{resolve}->{$host}) {
+    DEBUG_DNS and warn "DNS: $host is piggybacking on a pending lookup.\n";
+    push @{$heap->{resolve}->{$host}}, $request;
+    return;
+  }
+
+  # New request.  Start lookup.
+  $heap->{resolve}->{$host} = [ $request ];
+
+  my $response = $self->[SF_RESOLVER]->resolve(
+    event   => 'ka_dns_response',
+    host    => $host,
+    context => 1, # required but unused
+  );
+
+  if ($response) {
+    DEBUG_DNS and warn "DNS: immediate resolution for $host";
+    $kernel->yield(ka_dns_response => $response);
+    return;
+  }
+
+  DEBUG_DNS and warn "DNS: looking up $host in the background.\n";
 }
 
 sub _ka_dns_response {
   my ($self, $kernel, $heap, $response) = @_[OBJECT, KERNEL, HEAP, ARG0];
-
-  # Nothing to do if we're shut down.
 
   my $request_address = $response->{'host'};
   my $response_object = $response->{'response'};
@@ -856,27 +879,23 @@ sub _ka_dns_response {
 
   my $requests = delete $heap->{resolve}->{$request_address};
 
-  DEBUG and warn "DNS: request address = $request_address";
+  DEBUG_DNS and warn "DNS: got response for request address $request_address";
 
-  # No requests are on record for this lookup.
-  # TODO - What if the requests were canceled, possibly due to a
-  # timeout?  The answer: Timeouts don't cancel DNS requests, so we
-  # still get the response (eventually) and clean up the resolver
-  # thingy here.  DNS request piggybacking should prevent this from
-  # being called multiple times, so we should be safe there, too.
-  # Leave the die() in until coverage == 100%, so we can catch
-  # possible bugs in the future.
-  #
-  # If it says "cancelled", it was.
-  return unless defined $requests;
+  # Requests on record.
   if (defined $requests) {
-    if (ref $requests eq 'ARRAY') {
-        return if grep { $_ eq 'cancelled' } @$requests;
-    } else {
-      die "!!!: got a defined requests but NOT an arrayref";
+    # We can receive responses for canceled requests.  Ignore them: we
+    # cannot cancel PoCo::Client::DNS requests, so this is how we reap
+    # them when they're canceled.
+    if ($requests eq 'cancelled') {
+      DEBUG_DNS and warn "DNS: reaping cancelled request for $request_address";
+      return;
     }
-  } else {
-     die "!!!: Unexpectedly undefined requests";
+    unless (ref $requests eq 'ARRAY') {
+      die "DNS: got an unknown requests for $request_address: $requests";
+    }
+  }
+  else {
+    die "DNS: Unexpectedly undefined requests for $request_address";
   }
 
   # No response.  This is an error.  Cancel all requests for the
@@ -893,7 +912,7 @@ sub _ka_dns_response {
     # don't need this because we ask for only A answers anyway
     #next unless $answer->type eq "A";
 
-    DEBUG and warn "DNS: $request_address resolves to ", $answer->rdatastr;
+    DEBUG_DNS and warn "DNS: $request_address resolves to ", $answer->rdatastr;
 
     foreach my $request (@$requests) {
       # Don't bother continuing inactive requests.
@@ -908,7 +927,7 @@ sub _ka_dns_response {
 
   # Didn't return here.  No address record for the host?
   foreach my $request (@$requests) {
-    DEBUG and warn "DNS: $request_address does not resolve";
+    DEBUG_DNS and warn "DNS: $request_address does not resolve";
     _respond_with_error($request, "resolve", undef, "Host has no address."),
   }
 }
