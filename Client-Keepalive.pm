@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.20";
+$VERSION = "0.21";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
@@ -839,7 +839,7 @@ sub _ka_resolve_request {
 
   # Skip DNS resolution if it's already a dotted quad.
   # TODO - Not all dotted quads are good.
-  if ($host !~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
+  if ($host =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
     DEBUG_DNS and warn "DNS: $host is a dotted quad; skipping lookup";
     $kernel->call("$self", ka_add_to_queue => $request);
     return;
