@@ -873,6 +873,9 @@ sub _ka_resolve_request {
 sub _ka_dns_response {
   my ($self, $kernel, $heap, $response) = @_[OBJECT, KERNEL, HEAP, ARG0];
 
+  # We've shut down.  Nothing to do here.
+  return if $self->[SF_SHUTDOWN];
+
   my $request_address = $response->{'host'};
   my $response_object = $response->{'response'};
   my $response_error  = $response->{'error'};
@@ -901,11 +904,14 @@ sub _ka_dns_response {
   # No response.  This is an error.  Cancel all requests for the
   # address.  Tell everybody that their requests timed out.
   unless (defined $response_object) {
+    DEBUG_DNS and warn "DNS: undefined response = error";
     foreach my $request (@$requests) {
       _respond_with_error($request, "resolve", undef, $response_error),
     }
     return;
   }
+
+  DEBUG_DNS and warn "DNS: got a response";
 
   # A response!
   foreach my $answer ($response_object->answer()) {
@@ -1004,7 +1010,7 @@ sub _respond {
   my ($request, $fields) = @_;
 
   # Bail out early if the request isn't active.
-  return unless $request->[RQ_ACTIVE];
+  return unless $request->[RQ_ACTIVE] and $request->[RQ_SESSION];
 
   $poe_kernel->post(
     $request->[RQ_SESSION],
