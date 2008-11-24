@@ -75,10 +75,10 @@ sub got_conn {
 
   return unless keys(%{$heap->{conn}}) == 2;
 
-	# Shut this one down.
-	$heap->{conn}{$which}->start();
-	$heap->{conn}{$which}->wheel()->shutdown_input();
-	$heap->{conn}{$which}->wheel()->shutdown_output();
+  # Shut this one down.
+  $heap->{conn}{$which}->start();
+  $heap->{conn}{$which}->wheel()->shutdown_input();
+  $heap->{conn}{$which}->wheel()->shutdown_output();
 
   # Free all heaped connections.
   delete $heap->{conn};
@@ -103,22 +103,22 @@ sub test_alloc {
 }
 
 sub and_free {
-	my ($heap, $stuff) = @_[HEAP, ARG0];
+  my ($heap, $stuff) = @_[HEAP, ARG0];
 
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
 
   ok(defined($conn), "$which connection created successfully");
   is(
-		$stuff->{from_cache}, 'immediate',
-		"third connection honored from the pool"
-	);
+    $stuff->{from_cache}, 'immediate',
+    "third connection honored from the pool"
+  );
 
-	# Free the connection first.
-	# Close its internal socket before freeing.  This will ensure that
-	# the connection manager can cope with such things.
-	close $conn->[POE::Component::Connection::Keepalive::CK_SOCKET];
-	$conn = undef;
+  # Free the connection first.
+  # Close its internal socket before freeing.  This will ensure that
+  # the connection manager can cope with such things.
+  close $conn->[POE::Component::Connection::Keepalive::CK_SOCKET];
+  $conn = undef;
 
   TestServer->shutdown();
   $heap->{cm}->shutdown();

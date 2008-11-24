@@ -10,6 +10,7 @@ $VERSION = "0.21";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
+use Socket qw(SOL_SOCKET SO_LINGER);
 
 use POE;
 use POE::Wheel::SocketFactory;
@@ -679,49 +680,60 @@ sub _ka_reclaim_socket {
   my $request_key = $used->[USED_KEY];
   $self->_decrement_used_each($request_key);
 
-  # only try to reuse it if it still works
-  my ($nfound, $status);
-  if (defined fileno($socket)) {
-    DEBUG and warn "RECLAIM: checking if socket still works";
-    my $rin = '';
-    vec($rin, fileno($socket), 1) = 1;
-    my ($rout, $eout);
-    $nfound = select ($rout=$rin, undef, $eout=$rin, 0);
-    DEBUG and warn "RECLAIM: select results: $nfound";
-
-    if ($nfound == -1) {
-      die "select failed: $!";
-    }
-
-    if ($nfound) {
-      use bytes;
-      DEBUG and warn "RECLAIM: uh oh, socket activity";
-      $status = sysread($socket, my $buf = "", 65536);
-      if (DEBUG and defined $status) {
-        warn "RECLAIM: read $status bytes. 0 means EOF";
-      }
-    }
-
-    if (!$nfound or $status != 0) {
-      DEBUG and warn "RECLAIM: reclaiming socket";
-
-      # Watch the socket, and set a keep-alive timeout.
-      $kernel->select_read($socket, "ka_socket_activity");
-      my $timer_id = $kernel->delay_set(
-        ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
-      );
-
-      # Record the socket as free to be used.
-      $self->[SF_POOL]{$request_key}{$socket} = $socket;
-      $self->[SF_SOCKETS]{$socket} = [
-        $request_key,       # SK_KEY
-        $timer_id,          # SK_TIMER
-      ];
-    }
-  }
-  else {
+  # Socket is closed.  We can't reuse it.
+  unless (defined fileno $socket) {
     DEBUG and warn "RECLAIM: freed socket has previously been closed";
+    goto &_ka_wake_up;
   }
+
+  # Socket is still open.  Check for lingering data.
+  DEBUG and warn "RECLAIM: checking if socket still works";
+
+  # Check for data on the socket, which implies that the server
+  # doesn't know we're done.  That leads to desynchroniziation on the
+  # protocol level, which strongly implies that we can't reuse the
+  # socket.  In this case, we'll make a quick attempt at fetching all
+  # the data, then close the socket.
+
+  my $rin = '';
+  vec($rin, fileno($socket), 1) = 1;
+  my ($rout, $eout);
+  my $socket_is_active = select ($rout=$rin, undef, $eout=$rin, 0);
+
+  if ($socket_is_active) {
+    DEBUG and warn "RECLAIM: socket is still active; trying to drain";
+    use bytes;
+    my $socket_had_data = sysread($socket, my $buf = "", 65536) || 0;
+    DEBUG and warn "RECLAIM: socket had $socket_had_data bytes. 0 means EOF";
+    DEBUG and warn "RECLAIM: Giving up on socket.";
+
+    # Avoid common FIN_WAIT_2 issues.
+    if ($socket_had_data) {
+      setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
+        "setsockopt: $!"
+      );
+    }
+
+    goto &_ka_wake_up;
+  }
+
+  # Socket is alive and has no data, so it's in a quiet, theoretically
+  # reclaimable state.
+
+  DEBUG and warn "RECLAIM: reclaiming socket";
+
+  # Watch the socket, and set a keep-alive timeout.
+  $kernel->select_read($socket, "ka_socket_activity");
+  my $timer_id = $kernel->delay_set(
+    ka_keepalive_timeout => $self->[SF_KEEPALIVE], $socket
+  );
+
+  # Record the socket as free to be used.
+  $self->[SF_POOL]{$request_key}{$socket} = $socket;
+  $self->[SF_SOCKETS]{$socket} = [
+    $request_key,       # SK_KEY
+    $timer_id,          # SK_TIMER
+  ];
 
   goto &_ka_wake_up;
 }
@@ -825,10 +837,14 @@ sub _ka_socket_activity {
     warn "CON: Got activity on socket for $key";
   }
 
-  use bytes;
-  return if sysread($socket, my $buf = "", 65536);
+  # Any socket activity on a kept-alive socket implies that the socket
+  # is no longer reusable.
 
-  DEBUG and warn "CON: socket got EOF or an error. removing it from the pool";
+  use bytes;
+  my $socket_had_data = sysread($socket, my $buf = "", 65536) || 0;
+  DEBUG and warn "CON: socket had $socket_had_data bytes. 0 means EOF";
+  DEBUG and warn "CON: Removing socket from the pool";
+
   $self->_remove_socket_from_pool($socket);
 }
 
@@ -989,6 +1005,11 @@ sub _remove_socket_from_pool {
 
   $poe_kernel->alarm_remove($socket_rec->[SK_TIMER]);
   $poe_kernel->select_read($socket, undef);
+
+  # Avoid common FIN_WAIT_2 issues.
+  setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
+    "setsockopt: $!"
+  );
 }
 
 # Internal function.  NOT AN EVENT HANDLER.

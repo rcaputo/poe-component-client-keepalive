@@ -33,21 +33,24 @@ POE::Session->create(
   }
 );
 
+# Start the connection manager, and allocate a connection to our test
+# server.
+
 sub start {
   my $heap = $_[HEAP];
-
   $heap->{cm} = POE::Component::Client::Keepalive->new();
-
-  {
-    $heap->{cm}->allocate(
-      scheme  => "http",
-      addr    => "localhost",
-      port    => PORT,
-      event   => "got_conn",
-      context => "first",
-    );
-  }
+  $heap->{cm}->allocate(
+    scheme  => "http",
+    addr    => "localhost",
+    port    => PORT,
+    event   => "got_conn",
+    context => "first",
+  );
 }
+
+# A connection has been allocated.
+# Tell the test server to send us something.
+# Discard the connection before we can retrieve from it.
 
 sub got_conn {
   my ($heap, $stuff) = @_[HEAP, ARG0..$#_];
@@ -65,9 +68,8 @@ sub got_conn {
   # Everything that was sent to it remains unread.
 }
 
-# Reallocate the free socket.  See if any input is on it.  There
-# should be none, as it was all directed to /dev/null while the socket
-# was free.
+# Reallocate the free socket.  It should be asynchronous because there
+# was data on the socket and the connection could not be reused.
 
 sub check_for_input {
   my ($kernel, $heap) = @_[KERNEL, HEAP];
@@ -87,7 +89,10 @@ sub got_conn2 {
   my ($kernel, $heap, $stuff) = @_[KERNEL, HEAP, ARG0..$#_];
 
   $heap->{conn} = $stuff->{connection};
-  is($stuff->{from_cache}, 'immediate', "second connection established synchronously");
+  is(
+    $stuff->{from_cache}, undef,
+    "second connection established assynchronously"
+  );
 
   $heap->{conn}->start(
     InputEvent => "got_input",
