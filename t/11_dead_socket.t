@@ -29,8 +29,8 @@ POE::Session->create(
     got_first_conn  => \&got_first_conn,
     cleanup1        => \&cleanup1,
     cleanup         => \&cleanup,
-    error	    => \&error,
-    input	    => \&input,
+    error      => \&error,
+    input      => \&input,
   }
 );
 
@@ -79,16 +79,16 @@ sub got_first_conn {
   if ($which eq 'first') {
     ok(not (defined ($stuff->{from_cache})), "$which not from cache");
     my $wheel = $conn->start(
-    	ErrorEvent => 'error',
-	InputEvent => 'cleanup1',
+      ErrorEvent => 'error',
+  InputEvent => 'cleanup1',
       );
     $heap->{conn} = $conn;
     TestServer->send_something;
   } else {
     ok(not (defined ($stuff->{from_cache})), "$which not from cache");
     my $wheel = $conn->start(
-    	ErrorEvent => 'error',
-	InputEvent => 'input',
+      ErrorEvent => 'error',
+  InputEvent => 'input',
       );
     TestServer->send_something;
     $heap->{conn} = $conn;

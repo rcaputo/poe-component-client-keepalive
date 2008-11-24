@@ -108,30 +108,30 @@ sub got_another_conn {
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
 
-	if ($which eq 'third') {
-		is(
-			$stuff->{from_cache}, 'immediate',
-			"$which connection request honored from pool"
-		);
-		return;
-	}
+  if ($which eq 'third') {
+    is(
+      $stuff->{from_cache}, 'immediate',
+      "$which connection request honored from pool"
+    );
+    return;
+  }
 
-	if ($which eq 'fourth') {
-		ok(
-			!defined ($stuff->{from_cache}),
-			"$which connection request honored from pool"
-		);
-		ok(defined($conn), "$which connection established asynchronously");
+  if ($which eq 'fourth') {
+    ok(
+      !defined ($stuff->{from_cache}),
+      "$which connection request honored from pool"
+    );
+    ok(defined($conn), "$which connection established asynchronously");
 
-		# Free the connection first.
-		$conn = undef;
+    # Free the connection first.
+    $conn = undef;
 
-		TestServer->shutdown();
-		$heap->{cm}->shutdown();
-		return;
-	}
+    TestServer->shutdown();
+    $heap->{cm}->shutdown();
+    return;
+  }
 
-	die;
+  die;
 }
 
 POE::Kernel->run();

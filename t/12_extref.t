@@ -27,7 +27,7 @@ my $global_cm = POE::Component::Client::Keepalive->new( );
 POE::Session->create(
   inline_states => {
     _start   => \&start,
-		_stop    => \&stop,
+    _stop    => \&stop,
     got_conn => \&got_conn,
   }
 );
@@ -35,13 +35,13 @@ POE::Session->create(
 sub start {
   my $heap = $_[HEAP];
 
-	$global_cm->allocate(
-		scheme  => "http",
-		addr    => "127.0.0.1",
-		port    => PORT,
-		event   => "got_conn",
-		context => "first",
-	);
+  $global_cm->allocate(
+    scheme  => "http",
+    addr    => "127.0.0.1",
+    port    => PORT,
+    event   => "got_conn",
+    context => "first",
+  );
 }
 
 sub got_conn {
@@ -50,16 +50,16 @@ sub got_conn {
   my $conn  = $stuff->{connection};
   my $which = $stuff->{context};
 
-	ok( defined($conn), "got the connection" );
+  ok( defined($conn), "got the connection" );
 
-	$global_cm->shutdown() unless $heap->{cm_shutdown}++;
+  $global_cm->shutdown() unless $heap->{cm_shutdown}++;
   TestServer->shutdown() unless $heap->{ts_shutdown}++;
 }
 
 sub stop {
-	my $heap = $_[HEAP];
+  my $heap = $_[HEAP];
 
-	$global_cm->shutdown() unless $heap->{cm_shutdown}++;
+  $global_cm->shutdown() unless $heap->{cm_shutdown}++;
   TestServer->shutdown() unless $heap->{ts_shutdown}++;
 }
 

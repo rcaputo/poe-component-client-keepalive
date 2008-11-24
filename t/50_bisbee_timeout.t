@@ -12,12 +12,12 @@ use POE;
 use POE::Component::Client::Keepalive;
 
 POE::Session->create(
-	inline_states => {
-		_child    => sub { },
-		_start    => \&start,
-		_stop     => \&crom_count_the_responses,
-		got_resp  => \&got_resp,
-	}
+  inline_states => {
+    _child    => sub { },
+    _start    => \&start,
+    _stop     => \&crom_count_the_responses,
+    got_resp  => \&got_resp,
+  }
 );
 
 POE::Kernel->run();
@@ -29,36 +29,36 @@ exit;
 # like "Host has no address."
 
 sub start {
-	my $heap = $_[HEAP];
+  my $heap = $_[HEAP];
 
-	$heap->{errors} = [ ];
+  $heap->{errors} = [ ];
 
-	$heap->{cm} = POE::Component::Client::Keepalive->new();
+  $heap->{cm} = POE::Component::Client::Keepalive->new();
 
-	$heap->{cm}->allocate(
-		scheme => "http",
-		addr   => "seriously-hoping-this-never-resolves.fail",
-		port   => 80,
-		event  => "got_resp",
-		context => "moo",
-		timeout => -1,
-	);
+  $heap->{cm}->allocate(
+    scheme => "http",
+    addr   => "seriously-hoping-this-never-resolves.fail",
+    port   => 80,
+    event  => "got_resp",
+    context => "moo",
+    timeout => -1,
+  );
 }
 
 # We received a response.  Count it.
 
 sub got_resp {
-	my ($heap, $stuff) = @_[HEAP, ARG0];
-	push @{$heap->{errors}}, $stuff->{function};
+  my ($heap, $stuff) = @_[HEAP, ARG0];
+  push @{$heap->{errors}}, $stuff->{function};
 }
 
 # End of run.  We're good if we receive only one timeout response.
 
 sub crom_count_the_responses {
-	my @errors = @{$_[HEAP]{errors}};
-	ok(
-		@errors == 1,
-		"should have received one response (actual=" .  @errors . ")"
-	);
-	ok( $errors[0] eq "connect", "the one response was a connect error");
+  my @errors = @{$_[HEAP]{errors}};
+  ok(
+    @errors == 1,
+    "should have received one response (actual=" .  @errors . ")"
+  );
+  ok( $errors[0] eq "connect", "the one response was a connect error");
 }
