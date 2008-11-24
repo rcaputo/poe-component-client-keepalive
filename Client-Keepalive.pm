@@ -1007,9 +1007,11 @@ sub _remove_socket_from_pool {
   $poe_kernel->select_read($socket, undef);
 
   # Avoid common FIN_WAIT_2 issues.
-  setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
-    "setsockopt: $!"
-  );
+  if (fileno $socket) {
+    setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
+      "setsockopt: $!"
+    );
+  }
 }
 
 # Internal function.  NOT AN EVENT HANDLER.
