@@ -252,6 +252,9 @@ sub _ka_wake_up {
         }
       );
 
+      # Remove the wheel-to-request index.
+      delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+
       next;
     }
 
