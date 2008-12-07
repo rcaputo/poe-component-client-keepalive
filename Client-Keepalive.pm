@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.23";
+$VERSION = "0.24";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT);
@@ -1010,11 +1010,17 @@ sub _remove_socket_from_pool {
   $poe_kernel->select_read($socket, undef);
 
   # Avoid common FIN_WAIT_2 issues.
-  if (fileno $socket) {
-    setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
-      "setsockopt: $!"
-    );
-  }
+  # Commented out because fileno() will return true for closed
+  # sockets, which makes setsockopt() highly unhappy.  Also, SO_LINGER
+  # will cause te socket closure to block, which is less than ideal.
+  # We need to revisit this another way, or just let sockets enter
+  # FIN_WAIT_2.
+
+#  if (fileno $socket) {
+#    setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
+#      "setsockopt: $!"
+#    );
+#  }
 }
 
 # Internal function.  NOT AN EVENT HANDLER.
