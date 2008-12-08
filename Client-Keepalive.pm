@@ -156,20 +156,21 @@ sub new {
       $self => {
         _start               => "_ka_initialize",
         _stop                => "_ka_stopped",
+        ka_add_to_queue      => "_ka_add_to_queue",
+        ka_cancel_dns_response => "_ka_cancel_dns_response",
         ka_conn_failure      => "_ka_conn_failure",
         ka_conn_success      => "_ka_conn_success",
+        ka_deallocate        => "_ka_deallocate",
+        ka_dns_response      => "_ka_dns_response",
+        ka_keepalive_timeout => "_ka_keepalive_timeout",
         ka_reclaim_socket    => "_ka_reclaim_socket",
         ka_relinquish_socket => "_ka_relinquish_socket",
         ka_request_timeout   => "_ka_request_timeout",
+        ka_resolve_request   => "_ka_resolve_request",
         ka_set_timeout       => "_ka_set_timeout",
         ka_shutdown          => "_ka_shutdown",
         ka_socket_activity   => "_ka_socket_activity",
-        ka_keepalive_timeout => "_ka_keepalive_timeout",
         ka_wake_up           => "_ka_wake_up",
-        ka_resolve_request   => "_ka_resolve_request",
-        ka_add_to_queue      => "_ka_add_to_queue",
-        ka_dns_response      => "_ka_dns_response",
-        ka_cancel_dns_response => "_ka_cancel_dns_response",
       },
     ],
   );
@@ -254,6 +255,7 @@ sub _ka_wake_up {
 
       # Remove the wheel-to-request index.
       delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+      _free_req_id($request->[RQ_ID]);
 
       next;
     }
@@ -416,48 +418,54 @@ sub deallocate {
     defined($req_id) and exists($active_req_ids{$req_id})
   );
 
-  my $request = $self->[SF_REQ_INDEX]{$req_id};
+  my $request = delete $self->[SF_REQ_INDEX]{$req_id};
   unless (defined $request) {
     DEBUG_DEALLOCATE and warn "deallocate could not find request $req_id";
     return;
   }
+  _free_req_id($request->[RQ_ID]);
+
+  # Now pass the vetted request & its ID into our manager session.
+  $poe_kernel->call("$self", "ka_deallocate", $request, $req_id);
+}
+
+sub _ka_deallocate {
+  my ($self, $heap, $request, $req_id) = @_[OBJECT, HEAP, ARG0, ARG1];
 
   my $conn_key = $request->[RQ_CONN_KEY];
   my $existing_connection = $self->_check_free_pool($conn_key);
 
+  # Existing connection.  Remove it from the pool, and delete the socket.
   if (defined $existing_connection) {
-    # remove it from the pool, delete the socket
     $self->_remove_socket_from_pool($existing_connection->{socket});
     DEBUG_DEALLOCATE and warn(
       "deallocate called, deleted already-connected socket"
     );
     return;
   }
-  else {
+
+  # No connection yet.  Cancel the request.
+  DEBUG_DEALLOCATE and warn(
+    "deallocate called without an existing connection.  ",
+    "cancelling connection request"
+  );
+
+  unless (exists $heap->{resolve}->{$request->[RQ_ADDRESS]}) {
     DEBUG_DEALLOCATE and warn(
-      "deallocate called without an existing connection.  ",
-      "cancelling connection request"
+      "deallocate cannot cancel dns -- no pending request"
     );
-
-    my $heap = $poe_kernel->get_active_session->get_heap;
-
-    unless (exists $heap->{resolve}->{$request->[RQ_ADDRESS]}) {
-      DEBUG_DEALLOCATE and warn(
-        "deallocate cannot cancel dns -- no pending request"
-      );
-      return;
-    }
-
-    if ($heap->{resolve}->{$request->[RQ_ADDRESS]} eq 'cancelled') {
-      DEBUG_DEALLOCATE and warn(
-        "deallocate cannot cancel dns -- request already cancelled"
-      );
-      return;
-    }
-
-    $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
     return;
   }
+
+  if ($heap->{resolve}->{$request->[RQ_ADDRESS]} eq 'cancelled') {
+    DEBUG_DEALLOCATE and warn(
+      "deallocate cannot cancel dns -- request already cancelled"
+    );
+    return;
+  }
+
+  $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
+  return;
 }
 
 sub _ka_cancel_dns_response {
@@ -542,6 +550,7 @@ sub _ka_conn_failure {
 
   # remove the wheel-to-request index
   delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+  _free_req_id($request->[RQ_ID]);
 
   # Discount the use by request key, removing the SF_USED record
   # entirely if it's now moot.
@@ -564,6 +573,7 @@ sub _ka_conn_success {
 
   # remove the wheel-to-request index
   delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+  _free_req_id($request->[RQ_ID]);
 
   # Remove the SF_USED placeholder, add in the socket, and store it
   # properly.
@@ -819,6 +829,7 @@ sub _shutdown_request {
 
     # remove the wheel-to-request index
     delete $self->[SF_REQ_INDEX]{$request->[RQ_ID]};
+    _free_req_id($request->[RQ_ID]);
   }
 
   if (defined $request->[RQ_SESSION]) {
