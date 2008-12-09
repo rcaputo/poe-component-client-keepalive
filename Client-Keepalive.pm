@@ -796,6 +796,10 @@ sub _ka_shutdown {
 
   # Stop any pending resolver requests.
   foreach my $host (keys %{$heap->{resolve}}) {
+    if ($heap->{resolve}{$host} eq 'cancelled') {
+      DEBUG and warn "SHT: Skipping shutdown for $host (already cancelled)";
+      next;
+    }
     DEBUG and warn "SHT: Shutting down resolver requests for $host";
     foreach my $request (@{$heap->{resolve}{$host}}) {
       $self->_shutdown_request($kernel, $request);
