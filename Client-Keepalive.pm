@@ -9,7 +9,7 @@ use vars qw($VERSION);
 $VERSION = "0.25";
 
 use Carp qw(croak);
-use Errno qw(ETIMEDOUT);
+use Errno qw(ETIMEDOUT EBADF);
 use Socket qw(SOL_SOCKET SO_LINGER);
 
 use POE;
@@ -718,15 +718,18 @@ sub _ka_reclaim_socket {
   if ($socket_is_active) {
     DEBUG and warn "RECLAIM: socket is still active; trying to drain";
     use bytes;
+
     my $socket_had_data = sysread($socket, my $buf = "", 65536) || 0;
     DEBUG and warn "RECLAIM: socket had $socket_had_data bytes. 0 means EOF";
     DEBUG and warn "RECLAIM: Giving up on socket.";
 
-    # Avoid common FIN_WAIT_2 issues.
+    # Avoid common FIN_WAIT_2 issues, but only for valid sockets.
+    #if ($socket_had_data and fileno($socket)) {
     if ($socket_had_data) {
-      setsockopt($socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)) or die(
-        "setsockopt: $!"
+      my $opt_result = setsockopt(
+        $socket, SOL_SOCKET, SO_LINGER, pack("sll",1,0,0)
       );
+      die "setsockopt: " . ($!+0) . " $!" if (not $opt_result and $!  != EBADF);
     }
 
     goto &_ka_wake_up;
