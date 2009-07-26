@@ -33,6 +33,7 @@ WriteMakefile(
   PREREQ_PM    => {
     'POE'                         => 0.31,
     'POE::Component::Client::DNS' => 1.01,
+    'Net::IP'                     => 1.25,
   },
   dist         => {
     COMPRESS   => 'gzip -9f',
