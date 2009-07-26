@@ -16,6 +16,7 @@ use POE;
 use POE::Wheel::SocketFactory;
 use POE::Component::Connection::Keepalive;
 use POE::Component::Client::DNS;
+use Net::IP qw(ip_is_ipv4);
 
 my $ssl_available;
 eval {
@@ -279,6 +280,7 @@ sub _ka_wake_up {
     # Move the wheel and its request into SF_WHEELS.
     DEBUG and warn "WAKEUP: creating wheel for $req_key";
 
+    # TODO - Set the SocketDomain to AF_INET6 if $addr =~ /:/?
     my $addr = ($request->[RQ_IP] or $request->[RQ_ADDRESS]);
     my $wheel = POE::Wheel::SocketFactory->new(
       BindAddress   => $self->[SF_BIND_ADDR],
@@ -872,8 +874,11 @@ sub _ka_resolve_request {
   my $host = $request->[RQ_ADDRESS];
 
   # Skip DNS resolution if it's already a dotted quad.
-  # TODO - Not all dotted quads are good.
-  if ($host =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
+  # ip_is_ipv4() doesn't require quads, so we count the dots.
+  #
+  # TODO - Do the same for IPv6 addresses containing colons?
+  # TODO - Would require AF_INET6 support around the SocketFactory.
+  if ((($host =~ tr[.][.]) == 3) and ip_is_ipv4($host)) {
     DEBUG_DNS and warn "DNS: $host is a dotted quad; skipping lookup";
     $kernel->call("$self", ka_add_to_queue => $request);
     return;
