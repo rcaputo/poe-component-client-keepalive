@@ -35,6 +35,14 @@ WriteMakefile(
     'POE::Component::Client::DNS' => 1.01,
     'Net::IP'                     => 1.25,
   },
+  LICENSE      => 'perl',
+  META_ADD     => {
+    resources  => {
+      license    => 'http://dev.perl.org/licenses/',
+      repository => 'http://thirdlobe.com/svn/poco-client-http/trunk'
+
+    },
+  },
   dist         => {
     COMPRESS   => 'gzip -9f',
     SUFFIX     => 'gz',
