@@ -1349,15 +1349,9 @@ keep-alive pool, allowing a program to terminate gracefully.
 L<POE>
 L<POE::Component::Connection::Keepalive>
 
-=head1 BUGS
-
-http://rt.cpan.org/NoAuth/Bugs.html?Dist=POE-Component-Client-Keepalive
-tracks the known issues with this component.  You can add to them by
-sending mail to bug-poe-component-client-keepalive@rt.cpan.org.
-
 =head1 LICENSE
 
-This distribution is copyright 2004-2006 by Rocco Caputo.  All rights
+This distribution is copyright 2004-2009 by Rocco Caputo.  All rights
 are reserved.  This distribution is free software; you may
 redistribute it and/or modify it under the same terms as Perl itself.
 
@@ -1371,5 +1365,17 @@ Rob Bloodgood helped out a lot.  Thank you.
 
 Joel Bernstein solved some nasty race conditions.  Portugal Telecom
 L<http://www.sapo.pt/> was kind enough to support his contributions.
+
+=head1 BUG TRACKER
+
+https://rt.cpan.org/Dist/Display.html?Status=Active&Queue=POE-Component-Client-Keepalive
+
+=head1 REPOSITORY
+
+http://thirdlobe.com/svn/poco-client-keepalive/
+
+=head1 OTHER RESOURCES
+
+http://search.cpan.org/dist/POE-Component-Client-Keepalive/
 
 =cut
