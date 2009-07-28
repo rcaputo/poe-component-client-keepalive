@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = "0.25";
+$VERSION = "0.260";
 
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT EBADF);

@@ -31,8 +31,8 @@ WriteMakefile(
     'Conn-Keepalive.pm'   => '$(INST_LIBDIR)/../Connection/Keepalive.pm',
   },
   PREREQ_PM    => {
-    'POE'                         => 0.31,
-    'POE::Component::Client::DNS' => 1.01,
+    'POE'                         => 1.007,
+    'POE::Component::Client::DNS' => 1.04,
     'Net::IP'                     => 1.25,
   },
   META_ADD     => {
