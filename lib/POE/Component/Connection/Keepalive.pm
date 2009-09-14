@@ -1,5 +1,3 @@
-# $Id$
-
 # This is a proxy object for a socket.  Its most important feature is
 # that it passes the socket back to POE::Component::Client::Keepalive
 # when it's destroyed.
@@ -10,7 +8,7 @@ use warnings;
 use strict;
 
 use vars qw($VERSION);
-$VERSION = do {my($r)=(q$Revision$=~/(\d+)/);sprintf"1.%04d",$r};
+$VERSION = "0.260";
 
 use Carp qw(croak);
 use POE::Wheel::ReadWrite;
@@ -76,7 +74,7 @@ sub close {
     $self->wheel->shutdown_output();
     $self->[CK_WHEEL] = undef;
   }
-  
+
   DEBUG and warn "about to close potentially tied socket/ tied = ", tied(*{$self->[CK_SOCKET]}) ;
   close $self->[CK_SOCKET];
 
@@ -181,8 +179,8 @@ that methods may be called upon it.
 
 =item close
 
-Closes the connection immediately. Calls shutdown_input() and shutdown_output()
-on the wheel also. 
+Closes the connection immediately. Calls shutdown_input() and
+shutdown_output() on the wheel also.
 
 =back
 
@@ -198,9 +196,9 @@ None known.
 
 =head1 LICENSE
 
-This distribution is copyright 2004 by Rocco Caputo.  All rights are
-reserved.  This distribution is free software; you may redistribute it
-and/or modify it under the same terms as Perl itself.
+This distribution is copyright 2004-2009 by Rocco Caputo.  All rights
+are reserved.  This distribution is free software; you may
+redistribute it and/or modify it under the same terms as Perl itself.
 
 =head1 AUTHOR
 

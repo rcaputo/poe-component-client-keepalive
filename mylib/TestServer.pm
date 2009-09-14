@@ -1,5 +1,3 @@
-# $Id$
-
 package TestServer;
 
 use warnings;

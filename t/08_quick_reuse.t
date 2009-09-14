@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 
 # Test rapid connection reuse.  Sets the maximum overall connections
 # to a low number.  Allocate up to the maximum.  Reuse one of the

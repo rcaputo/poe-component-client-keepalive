@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 
 # Test various error messages.
 

@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 # vim: filetype=perl
 
 # Test connection queuing.  Set the max active connection to be really

@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id: 03_each_queue.t,v 1.3 2005/04/15 15:49:56 rcaputo Exp $
 
 # Test connection queuing.  Set the per-connection queue to be really
 # small (one in all), and then try to allocate two connections.  The

@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 
 # Test keepalive.  Allocates a connection, frees it, waits for the
 # keep-alive timeout, allocates an identical connection.  The second

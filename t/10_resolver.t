@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id: 01_socket_reuse.t,v 1.2 2005/04/15 15:49:56 rcaputo Exp $
 
 # Test connection reuse.  Allocates a connection, frees it, and
 # allocates another.  The second allocation should return right away

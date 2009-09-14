@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 # vim: filetype=perl
 
 # Test connection queuing.  Set the per-connection queue to be really

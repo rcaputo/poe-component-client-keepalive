@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id: 07_keep_alive.t 17 2005-05-06 15:58:31Z martijn $
 
 # Test close() on connections. 
 

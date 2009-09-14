@@ -1,10 +1,9 @@
-# $Id$
 CHANGES
-Client-Keepalive.pm
-Conn-Keepalive.pm
 MANIFEST
 Makefile.PL
 README
+lib/POE/Component/Client/Keepalive.pm
+lib/POE/Component/Connection/Keepalive.pm
 mylib/TestServer.pm
 mylib/cvr.perl
 t/01_socket_reuse.t

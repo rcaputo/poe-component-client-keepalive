@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 
 # Testing the bits that keep track of connections per connection key.
 

@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 
 # Test activity on idle connections in the pool.
 

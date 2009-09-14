@@ -1,11 +1,10 @@
 #!/usr/bin/perl
-# $Id$
 
 # Regression test for a bug which occured because a loop
 # that would look for existing free connections would reuse
 # a connection without removing it from a list of connections
 # that can be closed if we have neared the connection limit.
- 
+
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
@@ -43,7 +42,7 @@ sub start {
 
   $heap->{cm} = POE::Component::Client::Keepalive->new(
     max_open => 2,
-    max_per_host => 2, 
+    max_per_host => 2,
   );
 
   $heap->{conn_count} = 0;
@@ -81,7 +80,7 @@ sub got_conn {
       port => ANOTHER_PORT,
       event => "got_conn",
       context => "second-b"
-    );  
+    );
   }
 
   if ($heap->{request_count} == 5) {

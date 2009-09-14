@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id$
 # vim: filetype=perl
 
 # Make sure that client sessions stay alive while they're waiting for
