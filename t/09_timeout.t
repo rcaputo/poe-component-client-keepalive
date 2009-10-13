@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# vim: filetype=perl
+# vim: filetype=perl ts=2 sw=2 expandtab
 
 # Test request timeouts.  Set the timeout ridiculously small, so
 # timeouts happen immediately.  Request a connection, and watch it
@@ -17,9 +17,20 @@ use POE::Component::Client::Keepalive;
 
 use TestServer;
 
+# TODO - Dynamically find ports so we don't conflict with someone.
+# And we WILL conflict with someone sooner or later!
 use constant PORT => 49018;
 TestServer->spawn(PORT);
 
+# Listen on a socket, but don't accept connections.
+use IO::Socket::INET;
+my $unaccepting_listener = IO::Socket::INET->new(
+  LocalAddr => "127.0.0.1",
+  LocalPort => PORT + 1,
+  Reuse     => "yes",
+) or die $!;
+
+# Session to run tests.
 POE::Session->create(
   inline_states => {
     _child   => sub { },
@@ -49,18 +60,17 @@ sub start {
     );
   }
 
-  # TODO - The 0.01 second timeout assumes it will give the component
-  # enough time to create a wheel but not establish a connection.
-  # This is a bold assumption, and it may lead to false failures.
+  # Try to connect to a socket we know is listening but won't answer.
+  # Forces the timeout after the wheel is created.
 
   {
     $heap->{cm}->allocate(
       scheme  => "http",
-      addr    => "google.com",
-      port    => 80,
+      addr    => "127.0.0.1",
+      port    => PORT+1,
       event   => "got_conn",
       context => "second",
-      timeout => 0.01,
+      timeout => 0.5,
     );
   }
 }
