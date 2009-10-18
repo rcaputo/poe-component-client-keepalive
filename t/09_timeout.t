@@ -82,10 +82,13 @@ sub got_conn {
   my $which = $stuff->{context};
   ok(!defined($stuff->{from_cache}), "$which didn't come from cache");
   ok(!defined($conn), "$which connection failed");
-  ok(
-    $stuff->{error_num} == Errno::ETIMEDOUT,
-    "$which connection request timed out"
-  );
+  SKIP: {
+    skip("Connection refused.", 1) if $stuff->{error_num} == Errno::ECONNREFUSED;
+    is(
+      $stuff->{error_num}, Errno::ETIMEDOUT,
+      "$which connection request timed out"
+    );
+  }
 
   return unless ++$heap->{timeout_count} == 2;
 
