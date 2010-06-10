@@ -150,7 +150,7 @@ sub got_fourth_conn {
   $! = ECONNREFUSED;
   my @wanted = ( lc "$!" );
   $! = ETIMEDOUT;
-  push @wanted, "$!";
+  push @wanted, lc "$!";
   push @wanted, "unknown error" if $^O eq "MSWin32";
 
   ok(
