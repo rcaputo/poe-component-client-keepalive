@@ -19,9 +19,8 @@ use Socket qw(AF_INET);
 
 use TestServer;
 
-# TODO - Dynamically find ports so we don't conflict with someone.
-# And we WILL conflict with someone sooner or later!
-use constant PORT => 49018;
+# Random port.  Kludge until TestServer can report a port number.
+use constant PORT => int(rand(65535-2000)) + 2000;
 TestServer->spawn(PORT);
 
 # Listen on a socket, but don't accept connections.

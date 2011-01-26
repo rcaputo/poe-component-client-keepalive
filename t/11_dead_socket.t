@@ -16,7 +16,8 @@ use POE::Component::Client::Keepalive;
 use POE::Component::Resolver;
 use Socket qw(AF_INET);
 
-use constant PORT => 49018;
+# Random port.  Kludge until TestServer can report a port number.
+use constant PORT => int(rand(65535-2000)) + 2000;
 use TestServer;
 
 TestServer->spawn(PORT);

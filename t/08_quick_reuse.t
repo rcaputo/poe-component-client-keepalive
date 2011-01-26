@@ -20,10 +20,8 @@ use Socket qw(AF_INET);
 
 use TestServer;
 
-# TODO - Ideally TestServer->spawn() should choose an unused port and
-# return that.
-
-use constant PORT => 48000 + int(rand 1000);
+# Random port.  Kludge until TestServer can report a port number.
+use constant PORT => int(rand(65535-2000)) + 2000;
 TestServer->spawn(PORT);
 
 use constant ANOTHER_PORT => PORT + 1;

@@ -18,7 +18,8 @@ use Socket qw(AF_INET);
 
 use TestServer;
 
-use constant PORT => 49018;
+# Random port.  Kludge until TestServer can report a port number.
+use constant PORT => int(rand(65535-2000)) + 2000;
 TestServer->spawn(PORT);
 
 POE::Session->create(
