@@ -39,7 +39,7 @@ sub new {
 sub DESTROY {
   my $self = shift;
   $self->[CK_WHEEL] = undef;
-  $self->[CK_MANAGER]->free($self->[CK_SOCKET]);
+  $self->[CK_MANAGER] and $self->[CK_MANAGER]->free($self->[CK_SOCKET]);
 }
 
 # Start a Read/Write wheel on the hidden socket.
