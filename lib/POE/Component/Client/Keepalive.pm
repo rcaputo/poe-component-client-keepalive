@@ -414,24 +414,23 @@ sub allocate {
   return $request->[RQ_ID];
 }
 
-# TODO - Is anyone using this?  It's not documented....
-#sub deallocate {
-#  my ($self, $req_id) = @_;
-#
-#  croak "deallocate() requires a request ID" unless(
-#    defined($req_id) and exists($active_req_ids{$req_id})
-#  );
-#
-#  my $request = delete $self->[SF_REQ_INDEX]{$req_id};
-#  unless (defined $request) {
-#    DEBUG_DEALLOCATE and warn "deallocate could not find request $req_id";
-#    return;
-#  }
-#  _free_req_id($request->[RQ_ID]);
-#
-#  # Now pass the vetted request & its ID into our manager session.
-#  $poe_kernel->call("$self", "ka_deallocate", $request, $req_id);
-#}
+sub deallocate {
+  my ($self, $req_id) = @_;
+
+  croak "deallocate() requires a request ID" unless(
+    defined($req_id) and exists($active_req_ids{$req_id})
+  );
+
+  my $request = delete $self->[SF_REQ_INDEX]{$req_id};
+  unless (defined $request) {
+    DEBUG_DEALLOCATE and warn "deallocate could not find request $req_id";
+    return;
+  }
+  _free_req_id($request->[RQ_ID]);
+
+  # Now pass the vetted request & its ID into our manager session.
+  $poe_kernel->call("$self", "ka_deallocate", $request, $req_id);
+}
 
 sub _ka_deallocate {
   my ($self, $heap, $request, $req_id) = @_[OBJECT, HEAP, ARG0, ARG1];
@@ -1221,10 +1220,11 @@ implementation details.
 
 =item allocate
 
-Allocate a new connection.  Allocate() will return immediately.  The
-allocated connection, however, will be posted back to the requesting
-session.  This happens even if the connection was found in the
-component's keep-alive cache.
+Allocate a new connection.  Allocate() will return a request ID
+immediately.  The allocated connection, however, will be posted back
+to the requesting session.  This happens even if the connection was
+found in the component's keep-alive cache.  It's a bit slower, but the
+use cases are cleaner that way.
 
 Allocate() requires five parameters and has an optional sixth.
 
@@ -1326,6 +1326,11 @@ objects call free() for you when they are destroyed.
 Not calling free() will cause a program to leak connections.  This is
 also not generally a problem, since free() is called automatically
 whenever connection objects are destroyed.
+
+=item deallocate
+
+Cancel a connection that has not yet been established.  Requires one
+parameter, the request ID returned by allocate().
 
 =item shutdown
 
