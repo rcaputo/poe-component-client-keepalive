@@ -586,7 +586,13 @@ sub _ka_conn_success {
     unless ($ssl_available) {
       die "There is no SSL support, please install POE::Component::SSLify";
     }
-    $socket = POE::Component::SSLify::Client_SSLify ($socket);
+    eval {
+      $socket = POE::Component::SSLify::Client_SSLify($socket);
+    };
+		if ($@) {
+			_respond_with_error($request, "sslify", undef, "$@");
+			return;
+		}
   }
 
   $used->[USED_SOCKET] = $socket;
