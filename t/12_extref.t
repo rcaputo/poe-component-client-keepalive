@@ -15,13 +15,17 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 use TestServer;
 
 use constant PORT => 49018;
 TestServer->spawn(PORT);
 
-my $global_cm = POE::Component::Client::Keepalive->new( );
+my $global_cm = POE::Component::Client::Keepalive->new(
+  resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
+);
 
 POE::Session->create(
   inline_states => {

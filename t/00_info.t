@@ -10,5 +10,5 @@ use_ok('POE::Component::Client::Keepalive');
 # idea from Test::Harness, thanks!
 diag("Testing Perl $], $^X on $^O");
 diag("Testing POE $POE::VERSION");
-diag("Testing POE::Component::Client::DNS $POE::Component::Client::DNS::VERSION");
+diag("Testing POE::Component::Resolver $POE::Component::Resolver::VERSION");
 diag("Testing POE::Component::Client::Keepalive $POE::Component::Client::Keepalive::VERSION");

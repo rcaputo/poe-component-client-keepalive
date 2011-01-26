@@ -14,6 +14,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 use TestServer;
 
@@ -47,7 +49,8 @@ sub start {
   # the timeout negative.  Connections can't happen in the past. :)
 
   $heap->{cm} = POE::Component::Client::Keepalive->new(
-    timeout => -1,
+    timeout  => -1,
+    resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
   );
 
   {
@@ -92,6 +95,7 @@ sub got_conn {
 
   return unless ++$heap->{timeout_count} == 2;
 
+  $heap->{cm}->shutdown();
   TestServer->shutdown();
 }
 

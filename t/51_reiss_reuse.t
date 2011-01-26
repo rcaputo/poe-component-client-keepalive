@@ -14,6 +14,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 use TestServer;
 
@@ -41,8 +43,9 @@ sub start {
   my $heap = $_[HEAP];
 
   $heap->{cm} = POE::Component::Client::Keepalive->new(
-    max_open => 2,
+    max_open     => 2,
     max_per_host => 2,
+    resolver     => POE::Component::Resolver->new(af_order => [ AF_INET ]),
   );
 
   $heap->{conn_count} = 0;

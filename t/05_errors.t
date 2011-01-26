@@ -11,6 +11,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 sub test_err {
   my ($err, $target) = @_;
@@ -28,7 +30,9 @@ eval {
 };
 test_err($@, "new() doesn't accept: moo");
 
-my $cm = POE::Component::Client::Keepalive->new();
+my $cm = POE::Component::Client::Keepalive->new(
+  resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
+);
 
 eval {
   $cm->allocate("one parameter");
@@ -96,6 +100,8 @@ eval {
 };
 test_err($@, "can't free() unallocated socket");
 
+$cm->shutdown();
+
 ### Test the connection.
 
 use TestServer;
@@ -107,7 +113,9 @@ POE::Session->create(
   inline_states => {
     _start => sub {
       my ($kernel, $heap) = @_[KERNEL, HEAP];
-      $heap->{cm} = POE::Component::Client::Keepalive->new();
+      $heap->{cm} = POE::Component::Client::Keepalive->new(
+        resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
+      );
       $heap->{cm}->allocate(
         scheme  => "http",
         addr    => "localhost",

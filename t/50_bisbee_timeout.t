@@ -10,6 +10,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 use Test::More tests => 2;
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 POE::Session->create(
   inline_states => {
@@ -33,7 +35,9 @@ sub start {
 
   $heap->{errors} = [ ];
 
-  $heap->{cm} = POE::Component::Client::Keepalive->new();
+  $heap->{cm} = POE::Component::Client::Keepalive->new(
+    resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
+  );
 
   $heap->{cm}->allocate(
     scheme => "http",

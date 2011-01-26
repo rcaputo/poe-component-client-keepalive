@@ -13,6 +13,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 use constant PORT => 49018;
 use TestServer;
@@ -38,6 +40,7 @@ sub start {
 
   $heap->{cm} = POE::Component::Client::Keepalive->new(
     max_per_host => 1,
+    resolver     => POE::Component::Resolver->new(af_order => [ AF_INET ]),
   );
 
   # Count the number of times test_pool_alive is called.  When that's

@@ -9,11 +9,12 @@ $VERSION = "0.263";
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT EBADF);
 use Socket qw(SOL_SOCKET SO_LINGER);
+use Socket6 qw(inet_ntop);
 
 use POE;
 use POE::Wheel::SocketFactory;
 use POE::Component::Connection::Keepalive;
-use POE::Component::Client::DNS;
+use POE::Component::Resolver;
 use Net::IP qw(ip_is_ipv4);
 
 my $ssl_available;
@@ -105,6 +106,7 @@ sub RQ_TIMER_ID () { 10 }   #   $request_timer_id,
 sub RQ_WHEEL_ID () { 11 }   #   $request_wheel_id,
 sub RQ_ACTIVE   () { 12 }   #   $request_is_active,
 sub RQ_ID       () { 13 }   #   $request_id,
+sub RQ_ADDR_FAM () { 14 }   #   $request_address_family,
                             # ];
 
 # Create a connection manager.
@@ -143,11 +145,7 @@ sub new {
     $bind_address,      # SF_BIND_ADDR
   ], $class;
 
-  unless (defined $resolver) {
-    $resolver = POE::Component::Client::DNS->spawn (
-      Alias => "$self\_resolver",
-    );
-  }
+  $resolver //= POE::Component::Resolver->new();
   $self->[SF_RESOLVER] = $resolver;
 
   POE::Session->create(
@@ -278,7 +276,6 @@ sub _ka_wake_up {
     # Move the wheel and its request into SF_WHEELS.
     DEBUG and warn "WAKEUP: creating wheel for $req_key";
 
-    # TODO - Set the SocketDomain to AF_INET6 if $addr =~ /:/?
     my $addr = ($request->[RQ_IP] or $request->[RQ_ADDRESS]);
     my $wheel = POE::Wheel::SocketFactory->new(
       BindAddress   => $self->[SF_BIND_ADDR],
@@ -286,6 +283,7 @@ sub _ka_wake_up {
       RemotePort    => $request->[RQ_PORT],
       SuccessEvent  => "ka_conn_success",
       FailureEvent  => "ka_conn_failure",
+      SocketDomain  => $request->[RQ_ADDR_FAM],
     );
 
     $self->[SF_WHEELS]{$wheel->ID} = [
@@ -396,6 +394,7 @@ sub allocate {
     undef,      # RQ_WHEEL_ID
     1,          # RQ_ACTIVE
     _allocate_req_id(), # RQ_ID
+    undef,      # RQ_ADDR_FAM
   ];
 
   $self->[SF_REQ_INDEX]{$request->[RQ_ID]} = $request;
@@ -812,8 +811,7 @@ sub _ka_shutdown {
 
   # Shut down the resolver.
   DEBUG and warn "SHT: Shutting down resolver";
-  $self->[SF_RESOLVER]->shutdown();
-  delete $self->[SF_RESOLVER];
+  $self->[SF_RESOLVER] = undef;
 
   # Finish keepalive's shutdown.
   $kernel->alias_remove("$self");
@@ -898,28 +896,21 @@ sub _ka_resolve_request {
   my $response = $self->[SF_RESOLVER]->resolve(
     event   => 'ka_dns_response',
     host    => $host,
-    context => 1, # required but unused
+    service => $request->[RQ_SCHEME],
   );
-
-  if ($response) {
-    DEBUG_DNS and warn "DNS: immediate resolution for $host";
-    $kernel->yield(ka_dns_response => $response);
-    return;
-  }
 
   DEBUG_DNS and warn "DNS: looking up $host in the background.\n";
 }
 
 sub _ka_dns_response {
-  my ($self, $kernel, $heap, $response) = @_[OBJECT, KERNEL, HEAP, ARG0];
+  my ($self, $kernel, $heap, $response_error, $addresses, $request) = @_[
+    OBJECT, KERNEL, HEAP, ARG0..ARG2
+  ];
 
   # We've shut down.  Nothing to do here.
   return if $self->[SF_SHUTDOWN];
 
-  my $request_address = $response->{'host'};
-  my $response_object = $response->{'response'};
-  my $response_error  = $response->{'error'};
-
+  my $request_address = $request->{host};
   my $requests = delete $heap->{resolve}->{$request_address};
 
   DEBUG_DNS and warn "DNS: got response for request address $request_address";
@@ -941,10 +932,10 @@ sub _ka_dns_response {
     die "DNS: Unexpectedly undefined requests for $request_address";
   }
 
-  # No response.  This is an error.  Cancel all requests for the
-  # address.  Tell everybody that their requests timed out.
-  unless (defined $response_object) {
-    DEBUG_DNS and warn "DNS: undefined response = error";
+  # This is an error.  Cancel all requests for the address.
+  # Tell everybody that their requests failed.
+  if ($response_error) {
+    DEBUG_DNS and warn "DNS: resolver error = $response_error";
     foreach my $request (@$requests) {
       _respond_with_error($request, "resolve", undef, $response_error),
     }
@@ -954,16 +945,16 @@ sub _ka_dns_response {
   DEBUG_DNS and warn "DNS: got a response";
 
   # A response!
-  foreach my $answer ($response_object->answer()) {
-    # don't need this because we ask for only A answers anyway
-    #next unless $answer->type eq "A";
+  foreach my $address_rec (@$addresses) {
+    my $numeric = $self->[SF_RESOLVER]->unpack_addr($address_rec);
 
-    DEBUG_DNS and warn "DNS: $request_address resolves to ", $answer->rdatastr;
+    DEBUG_DNS and warn "DNS: $request_address resolves to $numeric";
 
     foreach my $request (@$requests) {
       # Don't bother continuing inactive requests.
       next unless $request->[RQ_ACTIVE];
-      $request->[RQ_IP] = $answer->rdatastr;
+      $request->[RQ_IP] = $numeric;
+      $request->[RQ_ADDR_FAM] = $address_rec->{family};
       $kernel->yield(ka_add_to_queue => $request);
     }
 

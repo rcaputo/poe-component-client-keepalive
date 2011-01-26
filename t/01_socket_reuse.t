@@ -14,6 +14,8 @@ sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
 use POE;
 use POE::Component::Client::Keepalive;
+use POE::Component::Resolver;
+use Socket qw(AF_INET);
 
 use TestServer;
 
@@ -32,7 +34,9 @@ POE::Session->create(
 sub start {
   my $heap = $_[HEAP];
 
-  $heap->{cm} = POE::Component::Client::Keepalive->new();
+  $heap->{cm} = POE::Component::Client::Keepalive->new(
+    resolver => POE::Component::Resolver->new(af_order => [ AF_INET ]),
+  );
 
   $heap->{cm}->allocate(
     scheme  => "http",

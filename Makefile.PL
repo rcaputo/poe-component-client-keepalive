@@ -26,9 +26,9 @@ WriteMakefile(
   LICENSE      => 'perl',
   VERSION_FROM => 'lib/POE/Component/Client/Keepalive.pm',
   PREREQ_PM    => {
-    'POE'                         => 1.280,
-    'POE::Component::Client::DNS' => 1.051,
-    'Net::IP'                     => 1.25,
+    'POE'                      => 1.294,
+    'POE::Component::Resolver' => 0.900,
+    'Net::IP'                  => 1.25,
   },
   META_ADD     => {
     resources  => {
