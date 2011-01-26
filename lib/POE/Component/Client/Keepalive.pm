@@ -121,7 +121,7 @@ sub new {
   my $keep_alive   = delete($args{keep_alive})   || 15;
   my $timeout      = delete($args{timeout})      || 120;
   my $resolver     = delete($args{resolver});
-  my $bind_address = delete($args{bind_address}) || "0.0.0.0";
+  my $bind_address = delete($args{bind_address});
 
   my @unknown = sort keys %args;
   if (@unknown) {
@@ -278,7 +278,11 @@ sub _ka_wake_up {
 
     my $addr = ($request->[RQ_IP] or $request->[RQ_ADDRESS]);
     my $wheel = POE::Wheel::SocketFactory->new(
-      BindAddress   => $self->[SF_BIND_ADDR],
+      (
+        defined($self->[SF_BIND_ADDR])
+        ? (BindAddress => $self->[SF_BIND_ADDR])
+        : ()
+      ),
       RemoteAddress => $addr,
       RemotePort    => $request->[RQ_PORT],
       SuccessEvent  => "ka_conn_success",
