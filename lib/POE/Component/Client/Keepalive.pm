@@ -9,7 +9,6 @@ $VERSION = "0.263";
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT EBADF);
 use Socket qw(SOL_SOCKET SO_LINGER);
-use Socket6 qw(inet_ntop);
 
 use POE;
 use POE::Wheel::SocketFactory;
