@@ -90,23 +90,26 @@ use constant USED_KEY    => 2;   #   $conn_key,
 #   ....
 # );
 
-                                 # $request = [
-use constant RQ_SESSION  => 0;   #   $request_session,
-use constant RQ_EVENT    => 1;   #   $request_event,
-use constant RQ_SCHEME   => 2;   #   $request_scheme,
-use constant RQ_ADDRESS  => 3;   #   $request_address,
-use constant RQ_IP       => 4;   #   $request_ip,
-use constant RQ_PORT     => 5;   #   $request_port,
-use constant RQ_CONN_KEY => 6;   #   $request_connection_key,
-use constant RQ_CONTEXT  => 7;   #   $request_context,
-use constant RQ_TIMEOUT  => 8;   #   $request_timeout,
-use constant RQ_START    => 9;   #   $request_start_time,
-use constant RQ_TIMER_ID => 10;  #   $request_timer_id,
-use constant RQ_WHEEL_ID => 11;  #   $request_wheel_id,
-use constant RQ_ACTIVE   => 12;  #   $request_is_active,
-use constant RQ_ID       => 13;  #   $request_id,
-use constant RQ_ADDR_FAM => 14;  #   $request_address_family,
-                                 # ];
+                                    # $request = [
+use constant RQ_SESSION     => 0;   #   $request_session,
+use constant RQ_EVENT       => 1;   #   $request_event,
+use constant RQ_SCHEME      => 2;   #   $request_scheme,
+use constant RQ_ADDRESS     => 3;   #   $request_address,
+use constant RQ_IP          => 4;   #   $request_ip,
+use constant RQ_PORT        => 5;   #   $request_port,
+use constant RQ_CONN_KEY    => 6;   #   $request_connection_key,
+use constant RQ_CONTEXT     => 7;   #   $request_context,
+use constant RQ_TIMEOUT     => 8;   #   $request_timeout,
+use constant RQ_START       => 9;   #   $request_start_time,
+use constant RQ_TIMER_ID    => 10;  #   $request_timer_id,
+use constant RQ_WHEEL_ID    => 11;  #   $request_wheel_id,
+use constant RQ_ACTIVE      => 12;  #   $request_is_active,
+use constant RQ_ID          => 13;  #   $request_id,
+use constant RQ_ADDR_FAM    => 14;  #   $request_address_family,
+use constant RQ_FOR_SCHEME  => 15;  #   $request_address_family,
+use constant RQ_FOR_ADDRESS => 16;  #   $request_address_family,
+use constant RQ_FOR_PORT    => 17;  #   $request_address_family,
+                                    # ];
 
 # Create a connection manager.
 
@@ -351,6 +354,10 @@ sub allocate {
   my $timeout = delete $args{timeout};
   $timeout    = $self->[SF_TIMEOUT]    unless $timeout;
 
+  my $for_scheme  = delete($args{for_scheme}) || $scheme;
+  my $for_address = delete($args{for_addr}) || $address;
+  my $for_port    = delete($args{for_port}) || $port;
+
   croak "allocate() on shut-down connection manager" if $self->[SF_SHUTDOWN];
 
   my @unknown = sort keys %args;
@@ -358,7 +365,9 @@ sub allocate {
     croak "allocate() doesn't accept: @unknown";
   }
 
-  my $conn_key = "$scheme:$address:$port";
+  my $conn_key = (
+		"$scheme $address $port for $for_scheme $for_address $for_port"
+	);
 
   # If we have a connection pool for the scheme/address/port triple,
   # then we can maybe post an available connection right away.
@@ -384,20 +393,23 @@ sub allocate {
 
   my $request = [
     $poe_kernel->get_active_session(),  # RQ_SESSION
-    $event,     # RQ_EVENT
-    $scheme,    # RQ_SCHEME
-    $address,   # RQ_ADDRESS
-    undef,      # RQ_IP
-    $port,      # RQ_PORT
-    $conn_key,  # RQ_CONN_KEY
-    $context,   # RQ_CONTEXT
-    $timeout,   # RQ_TIMEOUT
-    time(),     # RQ_START
-    undef,      # RQ_TIMER_ID
-    undef,      # RQ_WHEEL_ID
-    1,          # RQ_ACTIVE
+    $event,       # RQ_EVENT
+    $scheme,      # RQ_SCHEME
+    $address,     # RQ_ADDRESS
+    undef,        # RQ_IP
+    $port,        # RQ_PORT
+    $conn_key,    # RQ_CONN_KEY
+    $context,     # RQ_CONTEXT
+    $timeout,     # RQ_TIMEOUT
+    time(),       # RQ_START
+    undef,        # RQ_TIMER_ID
+    undef,        # RQ_WHEEL_ID
+    1,            # RQ_ACTIVE
     _allocate_req_id(), # RQ_ID
-    undef,      # RQ_ADDR_FAM
+    undef,        # RQ_ADDR_FAM
+    $for_scheme,  # RQ_FOR_SCHEME
+    $for_address, # RQ_FOR_ADDRESS
+    $for_port,    # RQ_FOR_PORT
   ];
 
   $self->[SF_REQ_INDEX]{$request->[RQ_ID]} = $request;
@@ -588,10 +600,10 @@ sub _ka_conn_success {
     eval {
       $socket = POE::Component::SSLify::Client_SSLify($socket);
     };
-		if ($@) {
-			_respond_with_error($request, "sslify", undef, "$@");
-			return;
-		}
+    if ($@) {
+      _respond_with_error($request, "sslify", undef, "$@");
+      return;
+    }
   }
 
   $used->[USED_SOCKET] = $socket;
@@ -1069,10 +1081,13 @@ sub _respond {
     $request->[RQ_SESSION],
     $request->[RQ_EVENT],
     {
-      addr       => $request->[RQ_ADDRESS],
-      context    => $request->[RQ_CONTEXT],
-      port       => $request->[RQ_PORT],
-      scheme     => $request->[RQ_SCHEME],
+      addr        => $request->[RQ_ADDRESS],
+      context     => $request->[RQ_CONTEXT],
+      port        => $request->[RQ_PORT],
+      scheme      => $request->[RQ_SCHEME],
+      for_addr    => $request->[RQ_FOR_ADDRESS],
+      for_scheme  => $request->[RQ_FOR_SCHEME],
+      for_port    => $request->[RQ_FOR_PORT],
       %$fields,
     }
   );
