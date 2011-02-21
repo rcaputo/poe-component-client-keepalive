@@ -1,4 +1,0 @@
-sf_user           <none>
-cpan_user         RCAPUTO
-passive_ftp       yes
-release_subclass  Module::Release::RCAPUTO::Subversion
