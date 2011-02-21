@@ -3,9 +3,6 @@ package POE::Component::Client::Keepalive;
 use warnings;
 use strict;
 
-use vars qw($VERSION);
-$VERSION = "0.263";
-
 use Carp qw(croak);
 use Errno qw(ETIMEDOUT EBADF);
 use Socket qw(SOL_SOCKET SO_LINGER);
