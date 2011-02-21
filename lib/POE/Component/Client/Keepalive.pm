@@ -147,7 +147,7 @@ sub new {
     $bind_address,      # SF_BIND_ADDR
   ], $class;
 
-  $resolver //= POE::Component::Resolver->new();
+  $resolver ||= POE::Component::Resolver->new();
   $self->[SF_RESOLVER] = $resolver;
 
   POE::Session->create(
