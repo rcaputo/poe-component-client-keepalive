@@ -40,6 +40,8 @@ sub _free_req_id {
   delete $active_req_ids{$id};
 }
 
+my $default_resolver;
+
 # The connection manager uses a number of data structures, most of
 # them arrays.  These constants define offsets into those arrays, and
 # the comments document them.
@@ -144,8 +146,9 @@ sub new {
     $bind_address,      # SF_BIND_ADDR
   ], $class;
 
-  $resolver ||= POE::Component::Resolver->new();
-  $self->[SF_RESOLVER] = $resolver;
+  $self->[SF_RESOLVER] = (
+    $resolver || ($default_resolver ||= POE::Component::Resolver->new())
+  );
 
   POE::Session->create(
     object_states => [
@@ -363,8 +366,8 @@ sub allocate {
   }
 
   my $conn_key = (
-		"$scheme $address $port for $for_scheme $for_address $for_port"
-	);
+    "$scheme $address $port for $for_scheme $for_address $for_port"
+  );
 
   # If we have a connection pool for the scheme/address/port triple,
   # then we can maybe post an available connection right away.
