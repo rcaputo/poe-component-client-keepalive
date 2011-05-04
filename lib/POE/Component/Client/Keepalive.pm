@@ -832,6 +832,7 @@ sub _ka_shutdown {
 
   # Shut down the resolver.
   DEBUG and warn "SHT: Shutting down resolver";
+	$self->[SF_RESOLVER]->shutdown();
   $self->[SF_RESOLVER] = undef;
 
   # Finish keepalive's shutdown.
