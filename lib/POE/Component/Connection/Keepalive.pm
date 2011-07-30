@@ -96,8 +96,7 @@ __END__
 
 =head1 NAME
 
-POE::Component::Connection::Keepalive - a wheel wrapper around a
-kept-alive socket
+POE::Component::Connection::Keepalive - a wheel wrapper around a kept-alive socket
 
 =head1 SYNOPSIS
 
