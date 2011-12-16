@@ -11,7 +11,7 @@ use POE;
 use POE::Wheel::SocketFactory;
 use POE::Component::Connection::Keepalive;
 use POE::Component::Resolver;
-use Net::IP qw(ip_is_ipv4);
+use Net::IP::Minimal qw(ip_is_ipv4);
 
 my $ssl_available;
 eval {
