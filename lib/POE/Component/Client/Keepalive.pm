@@ -932,7 +932,7 @@ sub _ka_resolve_request {
   my $response = $self->[SF_RESOLVER]->resolve(
     event   => 'ka_dns_response',
     host    => $host,
-    service => $request->[RQ_SCHEME],
+    service => $request->[RQ_PORT],
   );
 
   DEBUG_DNS and warn "DNS: looking up $host in the background.\n";
