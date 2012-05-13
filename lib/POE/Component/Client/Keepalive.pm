@@ -111,9 +111,10 @@ use constant RQ_WHEEL_ID    => 11;  #   $request_wheel_id,
 use constant RQ_ACTIVE      => 12;  #   $request_is_active,
 use constant RQ_ID          => 13;  #   $request_id,
 use constant RQ_ADDR_FAM    => 14;  #   $request_address_family,
-use constant RQ_FOR_SCHEME  => 15;  #   $request_address_family,
-use constant RQ_FOR_ADDRESS => 16;  #   $request_address_family,
-use constant RQ_FOR_PORT    => 17;  #   $request_address_family,
+use constant RQ_FOR_SCHEME  => 15;  #   $...
+use constant RQ_FOR_ADDRESS => 16;  #   $...
+use constant RQ_FOR_PORT    => 17;  #   $...
+use constant RQ_RESOLVER_ID => 18;  #   $resolver_request_id,
                                     # ];
 
 # Create a connection manager.
@@ -420,6 +421,7 @@ sub allocate {
     $for_scheme,  # RQ_FOR_SCHEME
     $for_address, # RQ_FOR_ADDRESS
     $for_port,    # RQ_FOR_PORT
+    undef,        # RQ_RESOLVER_ID
   ];
 
   $self->[SF_REQ_INDEX]{$request->[RQ_ID]} = $request;
@@ -481,13 +483,6 @@ sub _ka_deallocate {
     return;
   }
 
-  if ($heap->{resolve}->{$request->[RQ_ADDRESS]} eq 'cancelled') {
-    DEBUG_DEALLOCATE and warn(
-      "deallocate cannot cancel dns -- request already cancelled"
-    );
-    return;
-  }
-
   $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
   return;
 }
@@ -497,6 +492,7 @@ sub _ka_cancel_dns_response {
 
   my $address = $request->[RQ_ADDRESS];
   DEBUG_DNS and warn "DNS: canceling request for $address\n";
+
   my $requests = $heap->{resolve}{$address};
 
   # Remove the resolver request for the address of this connection
@@ -514,7 +510,8 @@ sub _ka_cancel_dns_response {
 
   unless (@$requests) {
     DEBUG_DNS and warn "DNS: canceled all requests for $address";
-    $heap->{resolve}{$address} = 'cancelled';
+    $self->[SF_RESOLVER]->cancel( $request->[RQ_RESOLVER_ID] );
+    delete $heap->{resolve}{$address};
   }
 
   # cancel our attempt to connect
@@ -553,8 +550,16 @@ sub _ka_request_timeout {
     goto &_ka_conn_failure;
   }
 
+  my ($errnum, $errstr) = ($!+0, "$!");
+
+  # No wheel yet.  It must have timed out in connect.
+  if ($request->[RQ_RESOLVER_ID]) {
+    $self->[SF_RESOLVER]->cancel( $request->[RQ_RESOLVER_ID] );
+    $request->[RQ_RESOLVER_ID] = undef;
+  }
+
   # But what if there is no wheel?
-  _respond_with_error($request, "connect", $!+0, "$!"),
+  _respond_with_error($request, "connect", $errnum, $errstr),
 }
 
 # Connection failed.  Remove the SF_WHEELS record corresponding to the
@@ -831,15 +836,16 @@ sub _ka_shutdown {
 
   # Stop any pending resolver requests.
   foreach my $host (keys %{$heap->{resolve}}) {
-    if ($heap->{resolve}{$host} eq 'cancelled') {
-      DEBUG and warn "SHT: Skipping shutdown for $host (already cancelled)";
-      next;
-    }
     DEBUG and warn "SHT: Shutting down resolver requests for $host";
+
     foreach my $request (@{$heap->{resolve}{$host}}) {
       $self->_shutdown_request($kernel, $request);
     }
+
+    # Technically not needed since the resolver shutdown should do it.
+    $self->[SF_RESOLVER]->cancel( $heap->{resolve}->[0]->[RQ_RESOLVER_ID] );
   }
+
   $heap->{resolve} = { };
 
   # Shut down the resolver.
@@ -927,6 +933,11 @@ sub _ka_resolve_request {
   # It's already pending DNS resolution.  Combine this with previous.
   if (exists $heap->{resolve}->{$host}) {
     DEBUG_DNS and warn "DNS: $host is piggybacking on a pending lookup.\n";
+
+    # All requests for the same host share the same resolver ID.
+    # TODO - Although it should probably be keyed on host:port.
+    $request->[RQ_RESOLVER_ID] = $heap->{resolve}->{$host}->[0]->[RQ_RESOLVER_ID];
+
     push @{$heap->{resolve}->{$host}}, $request;
     return;
   }
@@ -934,7 +945,7 @@ sub _ka_resolve_request {
   # New request.  Start lookup.
   $heap->{resolve}->{$host} = [ $request ];
 
-  my $response = $self->[SF_RESOLVER]->resolve(
+  $request->[RQ_RESOLVER_ID] = $self->[SF_RESOLVER]->resolve(
     event   => 'ka_dns_response',
     host    => $host,
     service => $request->[RQ_PORT],
