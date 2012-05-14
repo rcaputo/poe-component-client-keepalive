@@ -608,22 +608,94 @@ sub _ka_conn_success {
   # properly.
   my $used = delete $self->[SF_USED]{$wheel_id};
 
-  if ($request->[RQ_SCHEME] eq 'https') {
-    unless ($ssl_available) {
-      die "There is no SSL support, please install POE::Component::SSLify";
-    }
-    eval {
-      $socket = POE::Component::SSLify::Client_SSLify($socket);
-    };
-    if ($@) {
-      _respond_with_error($request, "sslify", undef, "$@");
-      return;
-    }
+  unless ($request->[RQ_SCHEME] eq 'https') {
+    $self->_store_socket($used, $socket);
+    $self->_send_back_socket($request, $socket);
+    return;
   }
 
-  $used->[USED_SOCKET] = $socket;
+  # HTTPS here.
+  # Really applies to all SSL schemes.
 
+  unless ($ssl_available) {
+    die "There is no SSL support, please install POE::Component::SSLify";
+  }
+
+  eval {
+    $socket = POE::Component::SSLify::Client_SSLify(
+      $socket,
+
+      # TODO - To make non-blocking sslify work, I need to somehow
+      # defer the response until the following callback says it's
+      # fine.  Or if the callback says there's an error, it needs to
+      # be propagated out.
+      #
+      # Problem is, just setting the callback doesn't seem to get the
+      # connection to complete (successfully or otherwise).  There
+      # needs to be something more going on... but what?
+
+#      sub {
+#        my ($socket, $status, $errval) = @_;
+#        $errval = 'undef' unless defined $errval;
+#
+#        warn "socket($socket) status($status) errval($errval)";
+#
+#        # Connected okay.
+#        if ($status == 1) {
+#          $self->_send_back_socket($request, $socket);
+#          $self = $request = undef;
+#          return;
+#        }
+#
+#        # Didn't connect okay, or hasn't so far.
+#        # Report the error.
+#        if ($errval == 1) {
+#
+#          # Get all known errors, but only retain the most recent one.
+#          # I'm not sure this is needed, but the API mentions an error
+#          # queue, which implies that it could contain stale errors.
+#
+#          my $errnum;
+#          while (my $new_errnum = Net::SSLeay::ERR_get_error()) {
+#            $errnum = $new_errnum;
+#          }
+#
+#          my $errstr = Net::SSLeay::ERR_error_string($errnum);
+#          warn "   ssl_error($errnum) string($errstr)";
+#          _respond_with_error($request, "sslify", undef, $errstr);
+#
+#          # TODO - May the circle be broken.
+#          $self = $request = undef;
+#          return;
+#        }
+#      }
+    );
+  };
+
+  if ($@) {
+    _respond_with_error($request, "sslify", undef, "$@");
+    return;
+  }
+
+  # TODO - I think for SSL we just need to _store_socket().  The call
+  # to _send_back_socket() should be inside the SSL callback.
+  #
+  # Also, I think the callback might leak.  $request and $self may
+  # need to be weakened.
+
+  $self->_store_socket($used, $socket);
+  $self->_send_back_socket($request, $socket);
+}
+
+sub _store_socket {
+  my ($self, $used, $socket) = @_;
+  $used->[USED_SOCKET]      = $socket;
   $self->[SF_USED]{$socket} = $used;
+}
+
+sub _send_back_socket {
+  my ($self, $request, $socket) = @_;
+
   DEBUG and warn(
     "CON: posting... to $request->[RQ_SESSION] . $request->[RQ_EVENT]"
   );
