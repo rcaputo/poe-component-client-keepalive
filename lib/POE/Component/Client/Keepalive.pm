@@ -588,6 +588,8 @@ sub _ka_conn_failure {
 
   # Tell the requester about the failure.
   _respond_with_error($request, $func, $errnum, $errstr),
+
+  $self->_ka_wake_up($_[KERNEL]);
 }
 
 # Connection succeeded.  Remove the SF_WHEELS record corresponding to
