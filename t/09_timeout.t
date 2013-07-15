@@ -18,16 +18,13 @@ use POE::Component::Resolver;
 use Socket qw(AF_INET);
 
 use TestServer;
-
-# Random port.  Kludge until TestServer can report a port number.
-use constant PORT => int(rand(65535-2000)) + 2000;
-TestServer->spawn(PORT);
+my $server_port = TestServer->spawn(0);
 
 # Listen on a socket, but don't accept connections.
 use IO::Socket::INET;
 my $unaccepting_listener = IO::Socket::INET->new(
   LocalAddr => "127.0.0.1",
-  LocalPort => PORT + 1,
+  LocalPort => $server_port + 1,  # Cross fingers.
   Reuse     => "yes",
 ) or die $!;
 
@@ -56,7 +53,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
-      port    => PORT,
+      port    => $server_port,
       event   => "got_conn",
       context => "first",
     );
@@ -69,7 +66,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
-      port    => PORT+1,
+      port    => $server_port+1,
       event   => "got_conn",
       context => "second",
       timeout => 0.5,

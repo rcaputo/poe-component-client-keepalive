@@ -105,10 +105,7 @@ $cm->shutdown();
 ### Test the connection.
 
 use TestServer;
-
-# Random port.  Kludge until TestServer can report a port number.
-use constant PORT => int(rand(65535-2000)) + 2000;
-TestServer->spawn(PORT);
+my $server_port = TestServer->spawn(0);
 
 POE::Session->create(
   inline_states => {
@@ -120,7 +117,7 @@ POE::Session->create(
       $heap->{cm}->allocate(
         scheme  => "http",
         addr    => "localhost",
-        port    => PORT,
+        port    => $server_port,
         event   => "got_conn",
         context => "first",
       );

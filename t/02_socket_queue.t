@@ -18,14 +18,12 @@ use POE::Component::Client::Keepalive;
 use POE::Component::Resolver;
 use Socket qw(AF_INET);
 
-# Random port.  Kludge until TestServer can report a port number.
-use constant PORT => int(rand(65535-2000)) + 2000;
-use constant UNKNOWN_PORT => PORT+1;
 use TestServer;
 
 diag("This test may take a long time if your firewall blackholes connections.");
 
-TestServer->spawn(PORT);
+my $server_port  = TestServer->spawn(0);
+my $unknown_port = $server_port + 1;    # Kludge. Fingers crossed.
 
 POE::Session->create(
   inline_states => {
@@ -61,7 +59,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
-      port    => PORT,
+      port    => $server_port,
       event   => "got_first_conn",
       context => "first",
     );
@@ -71,7 +69,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
-      port    => PORT,
+      port    => $server_port,
       event   => "got_first_conn",
       context => "second",
     );
@@ -121,7 +119,7 @@ sub test_max_queue {
   $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
-    port    => PORT,
+    port    => $server_port,
     event   => "got_third_conn",
     context => "third",
   );
@@ -129,7 +127,7 @@ sub test_max_queue {
   $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "127.0.0.1",
-    port    => UNKNOWN_PORT,
+    port    => $unknown_port,
     event   => "got_fourth_conn",
     context => "fourth",
   );

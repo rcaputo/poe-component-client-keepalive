@@ -73,8 +73,8 @@ sub close {
   }
 
   DEBUG and warn "about to close potentially tied socket/ tied = ", (
-		tied(*{$self->[CK_SOCKET]}) || 'no'
-	);
+    tied(*{$self->[CK_SOCKET]}) || 'no'
+  );
   close $self->[CK_SOCKET];
 
   my $is_tied = defined tied(*{$self->[CK_SOCKET]});

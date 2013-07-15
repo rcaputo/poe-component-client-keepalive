@@ -20,12 +20,8 @@ use Socket qw(AF_INET);
 
 use TestServer;
 
-# Random port.  Kludge until TestServer can report a port number.
-use constant PORT => int(rand(65535-2000)) + 2000;
-TestServer->spawn(PORT);
-
-use constant ANOTHER_PORT => PORT + 1;
-TestServer->spawn(ANOTHER_PORT);
+my $port_a = TestServer->spawn(0);
+my $port_b = TestServer->spawn(0);
 
 POE::Session->create(
   inline_states => {
@@ -52,7 +48,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "localhost",
-      port    => PORT,
+      port    => $port_a,
       event   => "got_conn",
       context => "first",
     );
@@ -62,7 +58,7 @@ sub start {
     $heap->{cm}->allocate(
       scheme  => "http",
       addr    => "localhost",
-      port    => PORT,
+      port    => $port_a,
       event   => "got_conn",
       context => "second",
     );
@@ -70,12 +66,22 @@ sub start {
 }
 
 sub got_conn {
-  my ($heap, $stuff) = @_[HEAP, ARG0];
+  my ($heap, $response) = @_[HEAP, ARG0];
 
-  my $conn  = delete $stuff->{connection};
-  my $which = $stuff->{context};
-  ok(defined($conn), "$which connection established asynchronously");
-  ok(!defined($stuff->{from_cache}), "$which connection request deferred");
+  my $conn  = delete $response->{connection};
+  my $which = $response->{context};
+
+  if (defined $conn) {
+    pass "$which request established asynchronously";
+  }
+  else {
+    fail(
+      "$which request $response->{function} error $response->{error_num}: " .
+      $response->{error_str}
+    );
+  }
+
+  ok(!defined($response->{from_cache}), "$which connection request deferred");
 
   $conn = undef;
 
@@ -86,7 +92,7 @@ sub got_conn {
   $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "localhost",
-    port    => PORT,
+    port    => $port_a,
     event   => "got_another_conn",
     context => "third",
   );
@@ -95,22 +101,22 @@ sub got_conn {
   $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "localhost",
-    port    => ANOTHER_PORT,
+    port    => $port_b,
     event   => "got_another_conn",
     context => "fourth",
   );
 }
 
 sub got_another_conn {
-  my ($heap, $stuff) = @_[HEAP, ARG0];
+  my ($heap, $response) = @_[HEAP, ARG0];
 
-  # Deleting here to avoid a copy of the connection in %$stuff.
-  my $conn  = delete $stuff->{connection};
-  my $which = $stuff->{context};
+  # Deleting here to avoid a copy of the connection in %$response.
+  my $conn  = delete $response->{connection};
+  my $which = $response->{context};
 
   if ($which eq 'third') {
     is(
-      $stuff->{from_cache}, 'immediate',
+      $response->{from_cache}, 'immediate',
       "$which connection request honored from pool"
     );
     return;
@@ -118,10 +124,19 @@ sub got_another_conn {
 
   if ($which eq 'fourth') {
     ok(
-      !defined ($stuff->{from_cache}),
+      !defined ($response->{from_cache}),
       "$which connection request honored from pool"
     );
-    ok(defined($conn), "$which connection established asynchronously");
+
+    if (defined $conn) {
+      pass "$which request established asynchronously";
+    }
+    else {
+      fail(
+        "$which request $response->{function} error $response->{error_num}: " .
+        $response->{error_str}
+      );
+    }
 
     # Free the connection first.
     $conn = undef;

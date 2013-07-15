@@ -18,10 +18,7 @@ use POE::Component::Resolver;
 use Socket qw(AF_INET);
 
 use TestServer;
-
-# Random port.  Kludge until TestServer can report a port number.
-use constant PORT => int(rand(65535-2000)) + 2000;
-TestServer->spawn(PORT);
+my $server_port = TestServer->spawn(0);
 
 POE::Session->create(
   inline_states => {
@@ -42,7 +39,7 @@ sub start {
   $heap->{cm}->allocate(
     scheme  => "http",
     addr    => "localhost",
-    port    => PORT,
+    port    => $server_port,
     event   => "got_conn",
     context => "first",
   );
@@ -65,7 +62,7 @@ sub got_conn{
     $heap->{cm}->allocate(
      scheme  => "http",
      addr    => "localhost",
-     port    => PORT,
+     port    => $server_port,
      event   => "got_conn",
      context => "second",
     );
