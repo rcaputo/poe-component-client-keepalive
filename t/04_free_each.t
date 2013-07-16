@@ -109,7 +109,16 @@ sub and_free {
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
 
-  ok(defined($conn), "$which connection created successfully");
+  if (defined $conn) {
+    pass "$which request honored asynchronously";
+  }
+  else {
+    fail(
+      "$which request $stuff->{function} error $stuff->{error_num}: " .
+      $stuff->{error_str}
+    );
+  }
+
   is(
     $stuff->{from_cache}, 'immediate',
     "third connection honored from the pool"

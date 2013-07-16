@@ -59,7 +59,16 @@ sub got_conn {
 
   my $conn  = delete $stuff->{connection};
   my $which = $stuff->{context};
-  ok(defined($conn), "$which connection established asynchronously");
+
+  if (defined $conn) {
+    pass "$which request established asynchronously";
+  }
+  else {
+    fail(
+      "$which request $stuff->{function} error $stuff->{error_num}: " .
+      $stuff->{error_str}
+    );
+  }
 
   $conn = undef;
   if (++$heap->{request_count} == 1) {

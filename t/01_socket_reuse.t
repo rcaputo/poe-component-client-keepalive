@@ -51,7 +51,16 @@ sub got_conn{
   # The delete() ensures only one copy of the connection exists.
   my $connection = delete $stuff->{connection};
   my $which = $stuff->{context};
-  ok(defined($connection), "$which request honored asynchronously");
+
+  if (defined $connection) {
+    pass "$which request honored asynchronously";
+  }
+  else {
+    fail(
+      "$which request $stuff->{function} error $stuff->{error_num}: " .
+      $stuff->{error_str}
+    );
+  }
 
   my $is_cached = $stuff->{from_cache};
   # Destroy the connection, freeing its socket.
