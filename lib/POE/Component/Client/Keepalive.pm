@@ -21,8 +21,11 @@ eval {
 };
 
 use constant DEBUG => 0;
-use constant DEBUG_DNS => DEBUG || 0;
-use constant DEBUG_DEALLOCATE => DEBUG || 0;
+
+use constant {
+  DEBUG_DNS        => (DEBUG || 0),
+  DEBUG_DEALLOCATE => (DEBUG || 0),
+};
 
 use constant TCP_PROTO => scalar(getprotobyname "tcp") || (
   die "getprotobyname('tcp') failed: $!"
@@ -52,42 +55,43 @@ my $instances = 0;
 # them arrays.  These constants define offsets into those arrays, and
 # the comments document them.
 
-                                 # @$self = (
-use constant SF_POOL      => 0;  #   \%socket_pool,
-use constant SF_QUEUE     => 1;  #   \@request_queue,
-use constant SF_USED      => 2;  #   \%sockets_in_use,
-use constant SF_WHEELS    => 3;  #   \%wheels_by_id,
-use constant SF_USED_EACH => 4;  #   \%count_by_triple,
-use constant SF_MAX_OPEN  => 5;  #   $max_open_count,
-use constant SF_MAX_HOST  => 6;  #   $max_per_host,
-use constant SF_SOCKETS   => 7;  #   \%socket_xref,
-use constant SF_KEEPALIVE => 8;  #   $keep_alive_secs,
-use constant SF_TIMEOUT   => 9;  #   $default_request_timeout,
-use constant SF_RESOLVER  => 10; #   $poco_client_dns_object,
-use constant SF_SHUTDOWN  => 11; #   $shutdown_flag,
-use constant SF_REQ_INDEX => 12; #   \%request_id_to_wheel_id,
-use constant SF_BIND_ADDR => 13; #   $bind_address,
-                                 # );
+use constant {         # @$self = (
+  SF_POOL       => 0,  #   \%socket_pool,
+  SF_QUEUE      => 1,  #   \@request_queue,
+  SF_USED       => 2,  #   \%sockets_in_use,
+  SF_WHEELS     => 3,  #   \%wheels_by_id,
+  SF_USED_EACH  => 4,  #   \%count_by_triple,
+  SF_MAX_OPEN   => 5,  #   $max_open_count,
+  SF_MAX_HOST   => 6,  #   $max_per_host,
+  SF_SOCKETS    => 7,  #   \%socket_xref,
+  SF_KEEPALIVE  => 8,  #   $keep_alive_secs,
+  SF_TIMEOUT    => 9,  #   $default_request_timeout,
+  SF_RESOLVER   => 10, #   $poco_client_dns_object,
+  SF_SHUTDOWN   => 11, #   $shutdown_flag,
+  SF_REQ_INDEX  => 12, #   \%request_id_to_wheel_id,
+  SF_BIND_ADDR  => 13, #   $bind_address,
+  SF_ALIAS      => 14, #   $embedded_session_alias
+};                     # );
 
-                                 # $socket_xref{$socket} = [
-use constant SK_KEY       => 0;  #   $conn_key,
-use constant SK_TIMER     => 1;  #   $idle_timer,
-                                 # ];
+use constant {       # $socket_xref{$socket} = [
+  SK_KEY       => 0, #   $conn_key,
+  SK_TIMER     => 1, #   $idle_timer,
+};                   # ];
 
 # $count_by_triple{$conn_key} = $conn_count;
 
-                                 # $wheels_by_id{$wheel_id} = [
-use constant WHEEL_WHEEL   => 0; #   $wheel_object,
-use constant WHEEL_REQUEST => 1; #   $request,
-                                 # ];
+use constant {        # $wheels_by_id{$wheel_id} = [
+  WHEEL_WHEEL   => 0, #   $wheel_object,
+  WHEEL_REQUEST => 1, #   $request,
+};                    # ];
 
 # $socket_pool{$conn_key}{$socket} = $socket;
 
-                                 # $sockets_in_use{$socket} = (
-use constant USED_SOCKET => 0;   #   $socket_handle,
-use constant USED_TIME   => 1;   #   $allocation_time,
-use constant USED_KEY    => 2;   #   $conn_key,
-                                 # );
+use constant {      # $sockets_in_use{$socket} = (
+  USED_SOCKET => 0, #   $socket_handle,
+  USED_TIME   => 1, #   $allocation_time,
+  USED_KEY    => 2, #   $conn_key,
+};                  # );
 
 # @request_queue = (
 #   $request,
@@ -95,27 +99,27 @@ use constant USED_KEY    => 2;   #   $conn_key,
 #   ....
 # );
 
-                                    # $request = [
-use constant RQ_SESSION     => 0;   #   $request_session,
-use constant RQ_EVENT       => 1;   #   $request_event,
-use constant RQ_SCHEME      => 2;   #   $request_scheme,
-use constant RQ_ADDRESS     => 3;   #   $request_address,
-use constant RQ_IP          => 4;   #   $request_ip,
-use constant RQ_PORT        => 5;   #   $request_port,
-use constant RQ_CONN_KEY    => 6;   #   $request_connection_key,
-use constant RQ_CONTEXT     => 7;   #   $request_context,
-use constant RQ_TIMEOUT     => 8;   #   $request_timeout,
-use constant RQ_START       => 9;   #   $request_start_time,
-use constant RQ_TIMER_ID    => 10;  #   $request_timer_id,
-use constant RQ_WHEEL_ID    => 11;  #   $request_wheel_id,
-use constant RQ_ACTIVE      => 12;  #   $request_is_active,
-use constant RQ_ID          => 13;  #   $request_id,
-use constant RQ_ADDR_FAM    => 14;  #   $request_address_family,
-use constant RQ_FOR_SCHEME  => 15;  #   $...
-use constant RQ_FOR_ADDRESS => 16;  #   $...
-use constant RQ_FOR_PORT    => 17;  #   $...
-use constant RQ_RESOLVER_ID => 18;  #   $resolver_request_id,
-                                    # ];
+use constant {          # $request = [
+  RQ_SESSION     => 0,  #   $request_session,
+  RQ_EVENT       => 1,  #   $request_event,
+  RQ_SCHEME      => 2,  #   $request_scheme,
+  RQ_ADDRESS     => 3,  #   $request_address,
+  RQ_IP          => 4,  #   $request_ip,
+  RQ_PORT        => 5,  #   $request_port,
+  RQ_CONN_KEY    => 6,  #   $request_connection_key,
+  RQ_CONTEXT     => 7,  #   $request_context,
+  RQ_TIMEOUT     => 8,  #   $request_timeout,
+  RQ_START       => 9,  #   $request_start_time,
+  RQ_TIMER_ID    => 10, #   $request_timer_id,
+  RQ_WHEEL_ID    => 11, #   $request_wheel_id,
+  RQ_ACTIVE      => 12, #   $request_is_active,
+  RQ_ID          => 13, #   $request_id,
+  RQ_ADDR_FAM    => 14, #   $request_address_family,
+  RQ_FOR_SCHEME  => 15, #   $...
+  RQ_FOR_ADDRESS => 16, #   $...
+  RQ_FOR_PORT    => 17, #   $...
+  RQ_RESOLVER_ID => 18, #   $resolver_request_id,
+};                      # ];
 
 # Create a connection manager.
 
@@ -205,8 +209,7 @@ sub _ka_stopped {
 }
 
 sub DESTROY {
-  my $self = shift;
-  $self->shutdown();
+  $_[0]->shutdown();
 }
 
 # Request to wake up.  This should only happen during the edge
