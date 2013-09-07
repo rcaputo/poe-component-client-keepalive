@@ -198,12 +198,12 @@ sub new {
 }
 
 # Initialize the hidden session behind this component.
-# Set an alias so the public methods can send it messages easily.
+# Rendezvous with the object via a mutually agreed upon alias.
 
 sub _ka_initialize {
   my ($object, $kernel, $heap) = @_[OBJECT, KERNEL, HEAP];
   $instances++;
-  $heap->{resolve} = { };
+  $heap->{dns_requests} = { };
   $kernel->alias_set(ref($object) . "::" . $_[SESSION]->ID());
 }
 
@@ -485,7 +485,7 @@ sub _ka_deallocate {
     "cancelling connection request"
   );
 
-  unless (exists $heap->{resolve}->{$request->[RQ_ADDRESS]}) {
+  unless (exists $heap->{dns_requests}{$request->[RQ_ADDRESS]}) {
     DEBUG_DEALLOCATE and warn(
       "deallocate cannot cancel dns -- no pending request"
     );
@@ -502,7 +502,7 @@ sub _ka_cancel_dns_response {
   my $address = $request->[RQ_ADDRESS];
   DEBUG_DNS and warn "DNS: canceling request for $address\n";
 
-  my $requests = $heap->{resolve}{$address};
+  my $requests = $heap->{dns_requests}{$address};
 
   # Remove the resolver request for the address of this connection
   # request
@@ -520,7 +520,7 @@ sub _ka_cancel_dns_response {
   unless (@$requests) {
     DEBUG_DNS and warn "DNS: canceled all requests for $address";
     $self->[SF_RESOLVER]->cancel( $request->[RQ_RESOLVER_ID] );
-    delete $heap->{resolve}{$address};
+    delete $heap->{dns_requests}{$address};
   }
 
   # cancel our attempt to connect
@@ -883,7 +883,7 @@ sub _ka_keepalive_timeout {
 
 sub _ka_relinquish_socket {
   my ($kernel, $socket) = @_[KERNEL, ARG0];
-  $kernel->alarm_remove($_[OBJECT]->[SF_SOCKETS]{$socket}[SK_TIMER]);
+  $kernel->alarm_remove($_[OBJECT][SF_SOCKETS]{$socket}[SK_TIMER]);
   $kernel->select_read($socket, undef);
 }
 
@@ -918,18 +918,18 @@ sub _ka_shutdown {
   }
 
   # Stop any pending resolver requests.
-  foreach my $host (keys %{$heap->{resolve}}) {
+  foreach my $host (keys %{$heap->{dns_requests}}) {
     DEBUG and warn "SHT: Shutting down resolver requests for $host";
 
-    foreach my $request (@{$heap->{resolve}{$host}}) {
+    foreach my $request (@{$heap->{dns_requests}{$host}}) {
       $self->_shutdown_request($kernel, $request);
     }
 
     # Technically not needed since the resolver shutdown should do it.
-    $self->[SF_RESOLVER]->cancel( $heap->{resolve}->[0]->[RQ_RESOLVER_ID] );
+    $self->[SF_RESOLVER]->cancel( $heap->{dns_requests}[0][RQ_RESOLVER_ID] );
   }
 
-  $heap->{resolve} = { };
+  $heap->{dns_requests} = { };
 
   # Shut down the resolver.
   DEBUG and warn "SHT: Shutting down resolver";
@@ -1014,19 +1014,19 @@ sub _ka_resolve_request {
   }
 
   # It's already pending DNS resolution.  Combine this with previous.
-  if (exists $heap->{resolve}->{$host}) {
+  if (exists $heap->{dns_requests}{$host}) {
     DEBUG_DNS and warn "DNS: $host is piggybacking on a pending lookup.\n";
 
     # All requests for the same host share the same resolver ID.
     # TODO - Although it should probably be keyed on host:port.
-    $request->[RQ_RESOLVER_ID] = $heap->{resolve}->{$host}->[0]->[RQ_RESOLVER_ID];
+    $request->[RQ_RESOLVER_ID] = $heap->{dns_requests}{$host}[0][RQ_RESOLVER_ID];
 
-    push @{$heap->{resolve}->{$host}}, $request;
+    push @{$heap->{dns_requests}{$host}}, $request;
     return;
   }
 
   # New request.  Start lookup.
-  $heap->{resolve}->{$host} = [ $request ];
+  $heap->{dns_requests}{$host} = [ $request ];
 
   $request->[RQ_RESOLVER_ID] = $self->[SF_RESOLVER]->resolve(
     event   => 'ka_dns_response',
@@ -1047,7 +1047,7 @@ sub _ka_dns_response {
   return if $self->[SF_SHUTDOWN];
 
   my $request_address = $request->{host};
-  my $requests = delete $heap->{resolve}->{$request_address};
+  my $requests = delete $heap->{dns_requests}{$request_address};
 
   DEBUG_DNS and warn "DNS: got response for request address $request_address";
 
@@ -1252,9 +1252,9 @@ POE::Component::Client::Keepalive - manage connections, with keep-alive
   exit;
 
   sub start {
-    $_[HEAP]->{ka} = POE::Component::Client::Keepalive->new();
+    $_[HEAP]{ka} = POE::Component::Client::Keepalive->new();
 
-    $_[HEAP]->{ka}->allocate(
+    $_[HEAP]{ka}->allocate(
       scheme  => "http",
       addr    => "127.0.0.1",
       port    => 9999,
