@@ -140,6 +140,8 @@ sub new {
     croak "new() doesn't accept: @unknown";
   }
 
+  my $alias = "POE::Component::Client::Keepalive::" . ++$current_id;
+
   my $self = bless [
     { },                # SF_POOL
     [ ],                # SF_QUEUE
@@ -155,38 +157,42 @@ sub new {
     undef,              # SF_SHUTDOWN
     undef,              # SF_REQ_INDEX
     $bind_address,      # SF_BIND_ADDR
+    undef,              # SF_ALIAS
   ], $class;
 
-  $default_resolver = $resolver
-    if $resolver && eval { $resolver->isa('POE::Component::Resolver') };
+  $default_resolver = $resolver if (
+    $resolver and eval { $resolver->isa('POE::Component::Resolver') }
+  );
 
   $self->[SF_RESOLVER] = (
     $default_resolver ||= POE::Component::Resolver->new()
   );
 
-  POE::Session->create(
+  my $session = POE::Session->create(
     object_states => [
       $self => {
-        _start               => "_ka_initialize",
-        _stop                => "_ka_stopped",
-        ka_add_to_queue      => "_ka_add_to_queue",
+        _start                 => "_ka_initialize",
+        _stop                  => "_ka_stopped",
+        ka_add_to_queue        => "_ka_add_to_queue",
         ka_cancel_dns_response => "_ka_cancel_dns_response",
-        ka_conn_failure      => "_ka_conn_failure",
-        ka_conn_success      => "_ka_conn_success",
-        ka_deallocate        => "_ka_deallocate",
-        ka_dns_response      => "_ka_dns_response",
-        ka_keepalive_timeout => "_ka_keepalive_timeout",
-        ka_reclaim_socket    => "_ka_reclaim_socket",
-        ka_relinquish_socket => "_ka_relinquish_socket",
-        ka_request_timeout   => "_ka_request_timeout",
-        ka_resolve_request   => "_ka_resolve_request",
-        ka_set_timeout       => "_ka_set_timeout",
-        ka_shutdown          => "_ka_shutdown",
-        ka_socket_activity   => "_ka_socket_activity",
-        ka_wake_up           => "_ka_wake_up",
+        ka_conn_failure        => "_ka_conn_failure",
+        ka_conn_success        => "_ka_conn_success",
+        ka_deallocate          => "_ka_deallocate",
+        ka_dns_response        => "_ka_dns_response",
+        ka_keepalive_timeout   => "_ka_keepalive_timeout",
+        ka_reclaim_socket      => "_ka_reclaim_socket",
+        ka_relinquish_socket   => "_ka_relinquish_socket",
+        ka_request_timeout     => "_ka_request_timeout",
+        ka_resolve_request     => "_ka_resolve_request",
+        ka_set_timeout         => "_ka_set_timeout",
+        ka_shutdown            => "_ka_shutdown",
+        ka_socket_activity     => "_ka_socket_activity",
+        ka_wake_up             => "_ka_wake_up",
       },
     ],
   );
+
+  $self->[SF_ALIAS] = ref($self) . "::" . $session->ID();
 
   return $self;
 }
@@ -198,7 +204,7 @@ sub _ka_initialize {
   my ($object, $kernel, $heap) = @_[OBJECT, KERNEL, HEAP];
   $instances++;
   $heap->{resolve} = { };
-  $kernel->alias_set("$object");
+  $kernel->alias_set(ref($object) . "::" . $_[SESSION]->ID());
 }
 
 # When programs crash, the session may stop in a non-shutdown state.
@@ -434,8 +440,8 @@ sub allocate {
     "poco-client-keepalive"
   );
 
-  $poe_kernel->call("$self", ka_set_timeout     => $request);
-  $poe_kernel->call("$self", ka_resolve_request => $request);
+  $poe_kernel->call($self->[SF_ALIAS], ka_set_timeout     => $request);
+  $poe_kernel->call($self->[SF_ALIAS], ka_resolve_request => $request);
 
   return $request->[RQ_ID];
 }
@@ -455,7 +461,7 @@ sub deallocate {
   _free_req_id($request->[RQ_ID]);
 
   # Now pass the vetted request & its ID into our manager session.
-  $poe_kernel->call("$self", "ka_deallocate", $request, $req_id);
+  $poe_kernel->call($self->[SF_ALIAS], "ka_deallocate", $request, $req_id);
 }
 
 sub _ka_deallocate {
@@ -486,7 +492,7 @@ sub _ka_deallocate {
     return;
   }
 
-  $poe_kernel->call( "$self", ka_cancel_dns_response => $request );
+  $poe_kernel->call( $self->[SF_ALIAS], ka_cancel_dns_response => $request );
   return;
 }
 
@@ -733,7 +739,7 @@ sub free {
   croak "can't free() unallocated socket" unless defined $used;
 
   # Reclaim the socket.
-  $poe_kernel->call("$self", "ka_reclaim_socket", $used);
+  $poe_kernel->call($self->[SF_ALIAS], "ka_reclaim_socket", $used);
 
   # Avoid returning things by mistake.
   return;
@@ -765,7 +771,7 @@ sub _check_free_pool {
 
   # _check_free_pool() may be operating in another session, so we call
   # the correct one here.
-  $poe_kernel->call("$self", "ka_relinquish_socket", $next_socket);
+  $poe_kernel->call($self->[SF_ALIAS], "ka_relinquish_socket", $next_socket);
 
   $self->[SF_USED]{$next_socket} = [
     $next_socket,  # USED_SOCKET
@@ -887,7 +893,7 @@ sub _ka_relinquish_socket {
 sub shutdown {
   my $self = shift;
   return if $self->[SF_SHUTDOWN];
-  $poe_kernel->call("$self", "ka_shutdown");
+  $poe_kernel->call($self->[SF_ALIAS], "ka_shutdown");
 }
 
 sub _ka_shutdown {
@@ -938,7 +944,7 @@ sub _ka_shutdown {
   }
 
   # Finish keepalive's shutdown.
-  $kernel->alias_remove("$self");
+  $kernel->alias_remove($self->[SF_ALIAS]);
   $self->[SF_SHUTDOWN] = 1;
 
   return;
@@ -1003,7 +1009,7 @@ sub _ka_resolve_request {
   # TODO - Would require AF_INET6 support around the SocketFactory.
   if ((($host =~ tr[.][.]) == 3) and ip_is_ipv4($host)) {
     DEBUG_DNS and warn "DNS: $host is a dotted quad; skipping lookup";
-    $kernel->call("$self", ka_add_to_queue => $request);
+    $kernel->call($self->[SF_ALIAS], ka_add_to_queue => $request);
     return;
   }
 
@@ -1128,7 +1134,7 @@ sub _ka_add_to_queue {
   # Wake the session up, and return nothing, signifying sound and fury
   # yet to come.
   DEBUG and warn "posting wakeup for $conn_key";
-  $poe_kernel->post("$self", "ka_wake_up");
+  $poe_kernel->post($self->[SF_ALIAS], "ka_wake_up");
   return;
 }
 
