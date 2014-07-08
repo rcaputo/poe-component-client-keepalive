@@ -926,7 +926,11 @@ sub _ka_shutdown {
     }
 
     # Technically not needed since the resolver shutdown should do it.
-    $self->[SF_RESOLVER]->cancel( $heap->{dns_requests}[0][RQ_RESOLVER_ID] );
+    # They all share the same host, so canceling the first should get
+    # them all.
+    $self->[SF_RESOLVER]->cancel(
+      $heap->{dns_requests}{$host}[0][RQ_RESOLVER_ID]
+    );
   }
 
   $heap->{dns_requests} = { };
