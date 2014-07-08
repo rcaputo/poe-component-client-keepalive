@@ -78,6 +78,7 @@ sub got_conn{
   } elsif ($which eq 'second') {
     ok(defined $is_cached, "$which request from cache");
     TestServer->shutdown();
+		$heap->{cm}->shutdown();
   }
 
 }
