@@ -27,10 +27,6 @@ use constant {
   DEBUG_DEALLOCATE => (DEBUG || 0),
 };
 
-use constant TCP_PROTO => scalar(getprotobyname "tcp") || (
-  die "getprotobyname('tcp') failed: $!"
-);
-
 # Manage connection request IDs.
 
 my $current_id = 0;
@@ -1036,7 +1032,7 @@ sub _ka_resolve_request {
     event   => 'ka_dns_response',
     host    => $host,
     service => $request->[RQ_PORT],
-    hints   => { protocol => TCP_PROTO },
+    hints   => { protocol => Socket::IPPROTO_TCP },
   );
 
   DEBUG_DNS and warn "DNS: looking up $host in the background.\n";
