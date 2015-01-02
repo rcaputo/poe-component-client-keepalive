@@ -125,46 +125,43 @@ sub new {
   croak "new() needs an even number of parameters" if @_ % 2;
   my %args = @_;
 
-  my $max_per_host = delete($args{max_per_host}) || 4;
-  my $max_open     = delete($args{max_open})     || 128;
-  my $keep_alive   = delete($args{keep_alive})   || 15;
-  my $timeout      = delete($args{timeout})      || 120;
-  my $resolver     = delete($args{resolver});
-  my $bind_address = delete($args{bind_address});
+  # Some initial values come from constructor arguments; others always
+  # default to the appropriate empty values.
+  my %constructor_args = (
 
+    # Modifiable values
+    SF_MAX_OPEN  => delete $args{max_open}     || 128,
+    SF_MAX_HOST  => delete $args{max_per_host} || 4,
+    SF_KEEPALIVE => delete $args{keep_alive}   || 15,
+    SF_TIMEOUT   => delete $args{timeout}      || 120,
+    SF_BIND_ADDR => delete $args{bind_address} || undef,
+
+    # Empty values at the start of an object's life
+    SF_QUEUE => [],
+    (map { $_ => {} } qw(SF_POOL SF_USED SF_WHEELS SF_USED_EACH SF_SOCKETS)),
+    (map { $_ => undef } qw(SF_SHUTDOWN SF_REQ_INDEX SF_ALIAS)),
+  );
+
+  # The resolver should be an ordinary resolver unless it looks like the
+  # caller knows what they're doing.
+  my $resolver = delete($args{resolver});
+  if (!$resolver || !eval { $resolver->isa('POE::Component::Resolver') }) {
+    $resolver = POE::Component::Resolver->new;
+  }
+  $constructor_args{SF_RESOLVER} = $resolver;
+
+  # Anything unexpected is an error.
   my @unknown = sort keys %args;
   if (@unknown) {
     croak "new() doesn't accept: @unknown";
   }
 
-  ### FIXME: do we still need this?
-  my $alias = "POE::Component::Client::Keepalive::" . ++$current_id;
-
-  my $self = bless [
-    { },                # SF_POOL
-    [ ],                # SF_QUEUE
-    { },                # SF_USED
-    { },                # SF_WHEELS
-    { },                # SF_USED_EACH
-    $max_open,          # SF_MAX_OPEN
-    $max_per_host,      # SF_MAX_HOST
-    { },                # SF_SOCKETS
-    $keep_alive,        # SF_KEEPALIVE
-    $timeout,           # SF_TIMEOUT
-    undef,              # SF_RESOLVER
-    undef,              # SF_SHUTDOWN
-    undef,              # SF_REQ_INDEX
-    $bind_address,      # SF_BIND_ADDR
-    undef,              # SF_ALIAS
-  ], $class;
-
-  $default_resolver = $resolver if (
-    $resolver and eval { $resolver->isa('POE::Component::Resolver') }
-  );
-
-  $self->[SF_RESOLVER] = (
-    $default_resolver ||= POE::Component::Resolver->new()
-  );
+  # OK, unpack this hash into an arrayref of special stuff.
+  my @constructor_args;
+  for my $field (keys %constructor_args) {
+    $constructor_args[$class->$field] = $constructor_args{$field};
+  }
+  my $self = bless \@constructor_args, $class;
 
   my $session = POE::Session->create(
     object_states => [
@@ -190,6 +187,8 @@ sub new {
     ],
   );
 
+  ### FIXME: can this be moved into the constructor call, or does it have
+  ### side-effects?
   $self->[SF_ALIAS] = ref($self) . "::" . $session->ID();
 
   return $self;
