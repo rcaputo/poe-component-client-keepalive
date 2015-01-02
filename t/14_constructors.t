@@ -17,9 +17,6 @@ my $test_class = 'POE::Component::Client::Keepalive';
 require_ok($test_class);
 
 # Run all of our tests.
-my %param_alias;
-_setup_param_aliases();
-
 default_arguments();
 dodgy_arguments();
 override_defaults();
@@ -77,6 +74,7 @@ sub dodgy_arguments {
 
 # If we specify non-standard arguments, they override the defaults.
 
+my %param_alias;
 sub _setup_param_aliases {
   %param_alias = (
     max_per_host => 'SF_MAX_HOST',
@@ -88,6 +86,7 @@ sub _setup_param_aliases {
 }
 
 sub override_defaults {
+  _setup_param_aliases();
   my %non_defaults = (
     max_per_host => 5,
     max_open     => 127,
