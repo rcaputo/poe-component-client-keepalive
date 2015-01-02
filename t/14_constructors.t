@@ -82,7 +82,6 @@ sub _setup_param_aliases {
     keep_alive   => 'SF_KEEPALIVE',
     timeout      => 'SF_TIMEOUT',
   );
-
 }
 
 sub override_defaults {
