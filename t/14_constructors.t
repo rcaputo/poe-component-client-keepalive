@@ -101,6 +101,6 @@ sub override_defaults {
       $client->[$client->$constant],
       $non_defaults{$constructor_param},
       "Setting $constructor_param to something non-default took"
-      )
+    );
   }
 }
