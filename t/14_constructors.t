@@ -5,7 +5,9 @@
 use warnings;
 use strict;
 use lib qw(./mylib ../mylib);
+
 use Test::More;
+use Test::Fatal;
 
 sub POE::Kernel::ASSERT_DEFAULT () { 1 }
 
@@ -14,9 +16,13 @@ use POE;
 my $test_class = 'POE::Component::Client::Keepalive';
 require_ok($test_class);
 
+# Run all of our tests.
 default_arguments();
+dodgy_arguments();
 
-done_testing();
+# POE expects to run so stomp on warnings.
+POE::Kernel->run;
+Test::More::done_testing();
 
 # The constructor behaves as we expect and fills in default arguments
 # if they're not supplied.
@@ -24,7 +30,7 @@ done_testing();
 sub default_arguments {
 
   # We get something back.
-  my $client = POE::Component::Client::Keepalive->new;
+  my $client = $test_class->new;
   isa_ok($client, $test_class, 'blank arguments get us an object');
 
   # It has the default scalar values we expect.
@@ -56,7 +62,9 @@ sub default_arguments {
          'A resolver was built for us');
   like($client->[$client->SF_ALIAS], qr/^POE::Component::Client::Keepalive/,
        'The alias looks sane');
+}
 
-  # POE expects to run so stomp on warnings.
-  POE::Kernel->run;
+sub dodgy_arguments {
+  ok(exception { $test_class->new(haxx0r => 'l33t yo') },
+    'Unexpected arguments get rebuffed');
 }
