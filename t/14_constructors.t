@@ -17,8 +17,12 @@ my $test_class = 'POE::Component::Client::Keepalive';
 require_ok($test_class);
 
 # Run all of our tests.
+my %param_alias;
+_setup_param_aliases();
+
 default_arguments();
 dodgy_arguments();
+override_defaults();
 
 # POE expects to run so stomp on warnings.
 POE::Kernel->run;
@@ -35,7 +39,7 @@ sub default_arguments {
 
   # It has the default scalar values we expect.
   my %default_scalar = (
-    SF_MAX_OPEN  => 4,
+    SF_MAX_HOST  => 4,
     SF_MAX_OPEN  => 128,
     SF_KEEPALIVE => 15,
     SF_TIMEOUT   => 120,
@@ -64,7 +68,39 @@ sub default_arguments {
        'The alias looks sane');
 }
 
+# We can't supply dodgy arguments to the constructor.
+
 sub dodgy_arguments {
   ok(exception { $test_class->new(haxx0r => 'l33t yo') },
     'Unexpected arguments get rebuffed');
+}
+
+# If we specify non-standard arguments, they override the defaults.
+
+sub _setup_param_aliases {
+  %param_alias = (
+    max_per_host => 'SF_MAX_HOST',
+    max_open     => 'SF_MAX_OPEN',
+    keep_alive   => 'SF_KEEPALIVE',
+    timeout      => 'SF_TIMEOUT',
+  );
+
+}
+
+sub override_defaults {
+  my %non_defaults = (
+    max_per_host => 5,
+    max_open     => 127,
+    keep_alive   => 14,
+    timeout      => 121,
+  );
+  my $client = $test_class->new(%non_defaults);
+  for my $constructor_param (sort keys %non_defaults) {
+    my $constant = $param_alias{$constructor_param};
+    is(
+      $client->[$client->$constant],
+      $non_defaults{$constructor_param},
+      "Setting $constructor_param to something non-default took"
+      )
+  }
 }
