@@ -163,6 +163,7 @@ sub new {
   }
   my $self = bless \@constructor_args, $class;
 
+  # Create a session and add it in.
   my $session = POE::Session->create(
     object_states => [
       $self => {
@@ -186,9 +187,6 @@ sub new {
       },
     ],
   );
-
-  ### FIXME: can this be moved into the constructor call, or does it have
-  ### side-effects?
   $self->[SF_ALIAS] = ref($self) . "::" . $session->ID();
 
   return $self;
