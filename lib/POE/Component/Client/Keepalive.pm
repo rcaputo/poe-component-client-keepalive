@@ -28,6 +28,7 @@ use constant {
 };
 
 # Manage connection request IDs.
+### FIXME: is this still being used? It's not being used in the constructor.
 
 my $current_id = 0;
 my %active_req_ids;
@@ -136,6 +137,7 @@ sub new {
     croak "new() doesn't accept: @unknown";
   }
 
+  ### FIXME: do we still need this?
   my $alias = "POE::Component::Client::Keepalive::" . ++$current_id;
 
   my $self = bless [
