@@ -146,14 +146,13 @@ sub new {
   # caller knows what they're doing.
   my $resolver = delete($args{resolver});
   if (!$resolver || !eval { $resolver->isa('POE::Component::Resolver') }) {
-    $resolver = POE::Component::Resolver->new;
+    $resolver = $default_resolver //= POE::Component::Resolver->new;
   }
   $constructor_args{SF_RESOLVER} = $resolver;
 
   # Anything unexpected is an error.
-  my @unknown = sort keys %args;
-  if (@unknown) {
-    croak "new() doesn't accept: @unknown";
+  if (keys %args) {
+    croak "new() doesn't accept: " . join(' ', sort keys %args);
   }
 
   # OK, unpack this hash into an arrayref of special stuff.
